@@ -1,0 +1,54 @@
+# Frontend (Tauri / React / Vite)
+node_modules/
+dist/
+.vite/
+.cache/
+
+# Tauri / Rust
+src-tauri/target/
+src-tauri/gen/
+*.rs.bk
+
+# Python sidecar
+sidecar/__pycache__/
+sidecar/**/__pycache__/
+sidecar/.venv/
+sidecar/venv/
+sidecar/build/
+sidecar/dist/
+sidecar/*.spec
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# PyInstaller output (referenced by Tauri but not tracked)
+sidecar.exe
+src-tauri/binaries/sidecar*.exe
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local user data (should never be in repo)
+*.vasepipe
+*.vasepipe.json
+*.vasepipe/
+*.glb
+*.stl
+*.log
+
+# Test fixtures (keep these; remove this exclusion if needed)
+!sidecar/tests/fixtures/*.glb
+
+# Secrets — defence in depth, even though we don't put keys in files
+.env
+.env.local
+*.key
+*.pem
