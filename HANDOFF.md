@@ -1,60 +1,93 @@
 # VasePipe — Developer Handoff
 
-This is for the next dev (or future-you) picking up the project mid-stream. Read [README.md](README.md) first for the user-facing pitch and [docs/pipeline.md](docs/pipeline.md) for the spec of what each pipeline phase does.
+For the next dev (or future-you) picking up the project mid-stream. Read [README.md](README.md) first for the user-facing pitch and [docs/pipeline.md](docs/pipeline.md) for the spec of what each pipeline phase does.
 
-## Why these architectural choices
+## Architecture choices and why
 
-- **Tauri over Electron:** smaller installer (~30 MB shell vs ~100 MB), no Chromium runtime baggage. The bulk of our installer is `bpy`, not the UI.
-- **Python sidecar over Rust mesh ops:** `bpy` is the only mature, free library that does voxel remesh + boolean intersect with reliable watertight output. Trimesh and manifold3d cover ~70% of what we need but fall over on Meshy's typical "mesh-soup" output (proven in the prototype pipeline).
-- **JSON-RPC over stdio:** standard Tauri pattern, debuggable by `tee`-ing stdout, no port conflicts, no auth needed (process-local).
-- **`bpy` from PyPI, not subprocess'd Blender:** simpler bundling, no process startup tax per command, single Python interpreter for the session.
-- **Edit chain replay over destructive editing:** every "Apply" replays from the source GLB. Slower per-edit but guarantees determinism + makes save/load trivial (just store the chain, not the mesh state).
-- **`keyring` for the Meshy API key:** Windows Credential Manager is encrypted at rest, scoped per user, survives reboots, and is one line of code per read/write. Other options considered: env var (bad UX), plain JSON (bad security), prompt every launch (hostile UX), DPAPI direct (extra code for no UX gain).
+- **Tauri over Electron** — smaller installer (~30 MB shell vs ~100 MB), no Chromium runtime baggage. Now that Blender is external (not bundled), our installer is dominated by the Python sidecar (~10 MB) — total ~50 MB.
+- **External Blender via BlenderMCP socket, not bundled `bpy`** — this is the v1 pivot. The original plan bundled `bpy` (Blender as a Python module) into a 250 MB installer for a fully self-contained app. We chose to require Blender as a user-installed dependency instead because:
+  1. The BlenderMCP socket pattern is already proven (used in the prototype pipeline this app is wrapping)
+  2. Installer drops from 250 MB → 50 MB
+  3. Users can SEE the mesh evolving in Blender's viewport, which builds trust and helps debug bad outputs
+  4. Updates to Blender don't require a VasePipe rebuild
+  5. The `bpy` PyPI wheel is finicky on Windows (Python version coupling, DLL conflicts)
+- **Python sidecar over Rust mesh ops** — the sidecar is now thin (no `bpy`), but we keep Python because:
+  - The geometry ops are sent as **Python source code** over the BlenderMCP socket (Blender executes them inside its embedded interpreter)
+  - Re-using Python from the prototype is faster than translating to Rust
+  - `requests` for Meshy is one-line; `keyring` for credential management is one line
+- **JSON-RPC over stdio** between Tauri and sidecar — standard pattern, debuggable, no port conflicts.
+- **Edit chain replay over destructive editing** — every "Apply" replays from the source GLB. Slower per-edit but guarantees determinism + makes save/load trivial (just store the chain, not the mesh state).
+- **`keyring` for the Meshy API key** — Windows Credential Manager is encrypted at rest, scoped per user, survives reboots, and is one line of code per read/write. Other options considered: env var (bad UX), plain JSON (bad security), prompt every launch (hostile UX), DPAPI direct (extra code for no UX gain).
+
+## External runtime dependencies (the user installs these)
+
+| Dependency | Version | How VasePipe handles it |
+|---|---|---|
+| Blender | 4.2 LTS or newer | Wizard auto-detects; if missing, opens download page; wizard re-checks. |
+| BlenderMCP addon | Bundled .zip in installer | Wizard copies to user's Blender addons dir, enables it, walks user through "Connect to Claude" button. |
+| Bambu Studio | Any | Wizard finds default path or asks user to browse. |
+
+VasePipe expects Blender to be **running and connected** every session. The Editor screen shows a "Blender: Connected" badge in the status bar; if it goes red, the user clicks Reconnect (which retests `:9876`).
 
 ## What's done / what isn't
 
 Update this as you go.
 
 - [ ] Phase A — Hello, Tauri (skeleton, build to .exe)
-- [ ] Phase B — Sidecar plumbing
-- [ ] Phase C — Local mock pipeline
-- [ ] Phase D — Real Blender ops
-- [ ] Phase E — Real Meshy
-- [ ] Phase F — Export + slicer launch
-- [ ] Phase G — Persistence
-- [ ] Phase H — Polish + ship
+- [ ] Phase B — Sidecar plumbing (thin sidecar with MCP socket client)
+- [ ] Phase C — First-run wizard (Blender detect, addon install, connection test)
+- [ ] Phase D — Local mock pipeline
+- [ ] Phase E — Real Blender ops via MCP
+- [ ] Phase F — Real Meshy
+- [ ] Phase G — Export + slicer launch
+- [ ] Phase H — Persistence
+- [ ] Phase I — Polish + ship
 
 ## Where to start (cold pickup)
 
 1. Clone the repo. Read `docs/pipeline.md` — that's the spec for what each geometry op does.
-2. Run `pnpm install && cargo tauri dev`. App should launch with a stub UI.
-3. Run `cd sidecar && python main.py` in a separate terminal. Send a `{"jsonrpc":"2.0","id":1,"method":"system.ping"}\n` to its stdin and confirm you get a pong.
-4. Pick the next unchecked phase above. Each phase has explicit acceptance criteria in [PROMPT.md](PROMPT.md) — don't move on until they're met.
+2. Make sure you have Blender 4.2+ installed and the BlenderMCP addon loaded. In Blender's N-panel, BlenderMCP tab, click **Connect to Claude**. Verify port 9876 is listening with `netstat -an | findstr 9876`.
+3. Run `pnpm install && cargo tauri dev`. App should launch with a stub UI.
+4. Run `cd sidecar && python main.py` in a separate terminal. Send a `{"jsonrpc":"2.0","id":1,"method":"system.ping"}\n` to its stdin and confirm you get a pong.
+5. Pick the next unchecked phase above. Each phase has explicit acceptance criteria in [PROMPT.md](PROMPT.md) — don't move on until they're met.
 
 ## Pitfalls we hit (or expect to hit)
 
-- **Meshy returns "mesh soup" for many prompts.** A single watertight mesh per the prompt is the *intent*, not the *guarantee*. Voxel remesh at 0.8 mm + keep-largest-component is the only reliable way to get to a single watertight mesh. Don't skip this in the auto-clean chain.
+- **BlenderMCP socket dies on Blender restart.** The user's "Connect to Claude" button click is per-Blender-session. App must check the socket on launch and on every command; show "Reconnect" dialog if dead.
+- **BlenderMCP addon in `.zip` form needs to be bundled inside the installer's resources** and copied to the user's Blender install at first run. Test on multiple Blender versions (4.2, 4.3, 4.4) — addon manifest varies slightly.
+- **Meshy returns "mesh soup" for many prompts.** A single watertight mesh per the prompt is the *intent*, not the *guarantee*. Voxel remesh + keep-largest-component is the only reliable way to consolidate. Don't skip in the auto-clean chain.
+- **Voxel remesh runs on whatever-scale mesh you give it.** Meshy's outputs are at arbitrary scale (often 1-2 m per longest dim). At 0.8 mm voxel size on a 2 m mesh, you get **2.7 million faces**. **Always scale the mesh to target dimensions before voxel remesh**, or the face count blows up. Auto-clean order matters: scale → voxel remesh → keep largest → recenter → flat bottom → fix normals.
+- **Auto-clean must include a Decimate step.** Even with proper scale order, voxel remesh on a 200 mm object at 0.8 mm produces 100k+ faces. Decimate to ~50k for sane STLs.
+- **`open_top` is vase-specific.** It bisects 2mm below the top of the mesh and removes the cap. Wrong for guitars, chess pieces, busts, etc. Gate it on the `object_type` field in MODEL SPEC.
 - **`bpy` `Solidify` modifier breaks on dense voxel-remeshed topology.** Don't try to do hollow walls inside Blender. Hollowing is the slicer's job (vase mode or wall-count + infill=0).
 - **`bpy.ops.mesh.bisect` with `use_fill=True` on multi-component meshes produces T-junction artifacts** (multi-face edges where perpendicular cut planes meet existing component boundaries). Use Boolean Intersect with cutter cubes (EXACT solver) for clean topology when slicing.
 - **Volumes don't perfectly conserve across cuts** of dense voxel-remeshed meshes — `bm.calc_volume` has float precision limits. Tolerate ±1% in tests, log warnings beyond ±5%.
 - **Three.js GLTFLoader can't display materials without nodes.** Set diffuse colors before exporting the preview GLB or it'll render gray.
-- **PyInstaller + bpy needs `--collect-all bpy`** and you may need to exclude `bpy.utils.previews` from the bundle to avoid an import error.
 - **Tauri 2's NSIS bundler signs only with a real cert.** Ship unsigned for v1; document the SmartScreen prompt in README.
 - **Meshy's signed S3 URLs expire (~24h).** Download the GLB to disk in Phase 4 and store the local path; never re-fetch from the URL later.
 - **Blender's signed volume sign depends on normal direction.** A negative volume = inverted normals; flip them before any other op or every downstream check is wrong.
+- **MCP `execute_blender_code` has a per-call socket timeout.** Long-running ops (heavy voxel remesh on a 2 m mesh) can hang the socket. Either chunk the ops or pre-scale before remesh.
+
+## Color split — known limitation
+
+Parametric color splits (zebra / quarter) are designed for vase-shaped objects. For complex anatomies (guitar body / neck / headstock, chess piece base / column / top), the cuts don't follow the natural part boundaries. Surfacing this as an Editor-screen warning and recommending Bambu Studio's brush paint instead is the v1 escape hatch. Brush-paint-in-app is a v2 stretch goal.
 
 ## Testing approach
 
-- `pytest sidecar/tests/` is the workhorse. It runs against a fixture GLB (`tests/fixtures/sample_vase.glb` — borrow from a real Meshy run if you don't have one). Each pipeline op has a unit test asserting the sanity output (manifold, components, dim).
+- `pytest sidecar/tests/` is the workhorse. Tests connect to a running Blender + addon, send Python ops, and assert sanity output (manifold, components, dim).
+- For tests that don't need a real Blender, mock the MCP socket with a simple in-memory request/response stub.
 - Frontend has Vitest for `lib/` (project save/load, type schemas).
-- The biggest integration test is the "save → close app → reopen → load project → produce byte-identical STL" round-trip. That covers the determinism guarantee.
+- The biggest integration test is the "save → close app → reopen → load project → produce byte-identical STL" round-trip. Covers the determinism guarantee.
 - For Meshy, mock the HTTP layer with `responses` (Python lib). The real API path is exercised manually before each release; don't run it in CI.
+- Wizard tests need Blender installed in CI, OR fully mocked steps with a fake socket. Latter is fine for v1.
 
 ## Key files when investigating bugs
 
 - `sidecar/main.py` — JSON-RPC dispatcher, all command names live here
+- `sidecar/blender_client.py` — TCP client to BlenderMCP socket on `:9876`
 - `sidecar/orchestrator.py` — edit chain replay (deterministic)
-- `sidecar/pipeline/sanity.py` — manifold/components/normals/dims checks
+- `sidecar/ops/` — Python source for each Blender op (sent over the wire)
+- `sidecar/wizard.py` — Blender detect, addon install, connection test
 - `src/lib/ipc.ts` — typed wrappers around Tauri invoke; if a command is missing from here it's missing from the type system
 - `%LOCALAPPDATA%\VasePipe\logs\<timestamp>.log` — every sidecar stderr + crash report
 
@@ -68,8 +101,8 @@ Update this as you go.
 ## Releasing
 
 ```powershell
-.\scripts\build-sidecar.ps1     # PyInstaller → sidecar.exe (~5 min)
-cargo tauri build               # bundles UI + sidecar.exe → setup.exe
+.\scripts\build-sidecar.ps1     # PyInstaller → sidecar.exe (~30 sec; thin sidecar, no bpy)
+cargo tauri build               # bundles UI + sidecar.exe + addon.zip → setup.exe
 ```
 
-Output: `src-tauri/target/release/bundle/nsis/VasePipe-Setup.exe`. Smoke-test on a clean Windows VM before tagging.
+Output: `src-tauri/target/release/bundle/nsis/VasePipe-Setup.exe`. Smoke-test on a clean Windows VM with Blender pre-installed before tagging.

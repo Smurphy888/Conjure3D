@@ -1,6 +1,6 @@
 # VasePipe
 
-Turn a text description into a sliceable, multi-color 3D print. Single-click launch on Windows. No Blender install needed — Blender ships inside the app.
+Turn a text description into a sliceable, multi-color 3D print. Single-click launch on Windows.
 
 ```
 Prompt → Meshy preview → (your pick) → auto-clean → editor → STL → Bambu Studio
@@ -10,35 +10,46 @@ Prompt → Meshy preview → (your pick) → auto-clean → editor → STL → B
                         accept)                edits?)            yourself)
 ```
 
+VasePipe drives a running Blender instance via the BlenderMCP addon. Blender stays visible while you work, so you can watch the mesh evolve in Blender's viewport at the same time as the in-app preview. The first-run wizard installs the BlenderMCP addon and walks you through connecting it.
+
 ## Requirements
 
 - Windows 10/11, x64
-- 2 GB free disk (the bundled Blender is heavy)
+- ~200 MB free disk for the app + projects
 - A Meshy account and API key — https://www.meshy.ai/api
+- **Blender 4.2 LTS or newer** — https://www.blender.org/download/lts/ (the wizard prompts you to install if missing)
 - Bambu Studio installed — https://bambulab.com/en/download/studio
 - Internet connection (only when generating; editing is offline)
 
 ## Install
 
-1. Download `VasePipe-Setup.exe` from the latest release.
-2. Run it. SmartScreen may warn ("publisher unknown") — click **More info → Run anyway**. (The app is unsigned in v1; this is a one-time prompt.)
-3. App installs to `C:\Program Files\VasePipe\`. A Start menu entry + desktop shortcut are created.
+1. Download `VasePipe-Setup.exe` from the latest release (~50 MB).
+2. Run it. SmartScreen may warn ("publisher unknown") — click **More info → Run anyway**. (App is unsigned in v1.)
+3. App installs to `C:\Program Files\VasePipe\`. Start menu + desktop shortcut are created.
 
-## First run
+## First run (wizard walks you through this)
 
-1. Launch VasePipe.
-2. **Settings** dialog appears asking for your Meshy API key. Paste it; the key is stored in Windows Credential Manager (service: `vasepipe`).
-3. If Bambu Studio isn't at the default path (`C:\Program Files\Bambu Studio\bambu-studio.exe`), Settings will ask you to point at it. Path is saved to `%LOCALAPPDATA%\VasePipe\settings.json`.
-4. **New Project** screen opens. Type a prompt, set parameters, click **Generate**. ~3-5 min later you'll see a preview thumbnail.
+1. **Launch VasePipe.** A 5-step wizard appears.
+2. **Step 1 — Blender:** wizard checks for an installed Blender. If missing, you get a "Download Blender LTS" button. Install Blender, then click **Re-check** in the wizard.
+3. **Step 2 — BlenderMCP addon:** wizard copies the BlenderMCP addon into `%APPDATA%\Blender Foundation\Blender\<version>\scripts\addons\` and enables it. Click **Done**.
+4. **Step 3 — Connect Blender:** wizard launches Blender. In Blender, press `N` in the 3D viewport, click the **BlenderMCP** tab, click **Connect to Claude**. Back in the wizard, click **Test connection** — green check means socket `:9876` is live.
+5. **Step 4 — Bambu Studio:** wizard finds Bambu Studio at the default path. If missing, browse to `bambu-studio.exe`.
+6. **Step 5 — Meshy API key:** paste your key. Stored in Windows Credential Manager (service: `vasepipe`).
+7. Wizard finishes. **New Project** screen opens.
+
+## Daily use
+
+Every session needs Blender open with BlenderMCP "Connect to Claude" clicked. VasePipe checks this on launch and shows a Reconnect dialog if the socket is dead. You can minimize Blender — the app drives it via the socket.
 
 ## File locations
 
 | What | Where |
 |---|---|
-| Settings | `%LOCALAPPDATA%\VasePipe\settings.json` |
+| App settings | `%LOCALAPPDATA%\VasePipe\settings.json` |
 | Meshy API key | Windows Credential Manager → `vasepipe` |
 | Default project folder | `%LOCALAPPDATA%\VasePipe\projects\` |
 | Crash logs | `%LOCALAPPDATA%\VasePipe\logs\<timestamp>.log` |
+| BlenderMCP addon | `%APPDATA%\Blender Foundation\Blender\<version>\scripts\addons\blender_mcp\` |
 
 ## How a print actually happens
 
@@ -48,7 +59,7 @@ VasePipe gets you to a sliceable file. It does not slice or print. After Export,
 2. Assign filaments to objects if multi-color (panel on the right).
 3. Click **Slice plate** → review → **Print**.
 
-The handoff text shown in the Export screen has the exact slicer settings.
+The handoff text shown in the Export screen has the exact slicer settings for the shape you generated.
 
 ## Multi-color tips
 
@@ -57,21 +68,27 @@ The handoff text shown in the Export screen has the exact slicer settings.
 
 ## Troubleshooting
 
+**"Blender not detected"**
+Blender isn't installed, or installed somewhere unusual. Settings → Blender path → browse to `blender.exe`. Must be 4.2 or newer.
+
+**"BlenderMCP socket not responding (port 9876)"**
+Open Blender, press `N` in the 3D viewport, BlenderMCP tab, click **Connect to Claude**. The button must be clicked each time you start Blender. If the BlenderMCP tab isn't visible, the addon isn't enabled — Edit → Preferences → Add-ons → search "BlenderMCP" → enable.
+
 **"Generate" hangs at 0% for > 30s**
-The Meshy API didn't accept the request. Check Settings → Meshy key. The error appears in the bottom-left status bar; if not, check `%LOCALAPPDATA%\VasePipe\logs\`.
+Meshy didn't accept the request. Check Settings → Meshy key. Errors appear in the status bar; if not, see `%LOCALAPPDATA%\VasePipe\logs\`.
 
 **Editor "Apply" returns "Edit failed"**
-A Blender op crashed. Click the **Copy diagnostic** button in the toast, paste into a bug report. Mesh-soup inputs (very low-poly Meshy outputs) sometimes break voxel remesh; try Refine in step 3 first.
+A Blender op crashed. Click **Copy diagnostic** in the toast and paste into a bug report. Mesh-soup inputs (very low-poly Meshy outputs) sometimes break voxel remesh — try Refine in the Preview Pick step first.
 
 **"Bambu Studio not found"**
 Settings → Bambu Studio path → browse to `bambu-studio.exe`.
 
 **Sanity panel shows red lights**
-- Manifold red → mesh has holes; the auto-clean usually fixes this. If not, regenerate with a more printable prompt ("single watertight mesh, flat bottom" helps).
-- Longest dim red → your `target_height_mm` × scale puts a dimension over 256 mm. Lower target height.
+- Manifold red → mesh has holes; auto-clean usually fixes this. Otherwise regenerate with a more printable prompt ("single watertight mesh, flat bottom" helps).
+- Longest dim red → your `target_height_mm × scale` puts a dimension over 256 mm. Lower target height.
 
 **SmartScreen blocks the installer**
-Click "More info → Run anyway". The app is unsigned in v1.
+Click "More info → Run anyway". App is unsigned in v1.
 
 ## Uninstalling
 
@@ -79,10 +96,11 @@ Settings → Apps → VasePipe → Uninstall. To also clear the API key:
 ```powershell
 cmdkey /delete:vasepipe
 ```
-And to wipe project data:
+Wipe project data:
 ```powershell
 Remove-Item -Recurse "$env:LOCALAPPDATA\VasePipe"
 ```
+Optionally remove the BlenderMCP addon from Blender's Edit → Preferences → Add-ons.
 
 ## Privacy
 

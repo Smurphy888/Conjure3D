@@ -25,17 +25,16 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 
 ---
 
-## Phase B — Sidecar plumbing
+## Phase B — Thin sidecar plumbing
 
-### #2 — Pure-Python echo sidecar over stdio JSON-RPC
+### #2 — Pure-Python JSON-RPC echo sidecar
 
-**Goal:** A minimal Python script that reads JSON-RPC requests from stdin and writes responses to stdout. No `bpy` yet.
+**Goal:** A minimal Python script reads JSON-RPC requests from stdin and writes responses to stdout. Newline-delimited.
 
 **Tasks**
 - Create `sidecar/main.py` with a JSON-RPC 2.0 dispatch loop
 - Register one command: `system.ping → {ok: true, msg: "pong"}`
-- Newline-delimited messages
-- Add `sidecar/pyproject.toml` (Python 3.11)
+- Add `sidecar/pyproject.toml` (Python 3.11, deps: `requests`, `keyring`)
 
 **Acceptance**
 - [ ] `python sidecar/main.py` then paste `{"jsonrpc":"2.0","id":1,"method":"system.ping"}\n` → get pong back
@@ -51,56 +50,109 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 **Acceptance**
 - [ ] App startup shows "Sidecar: pong" instead of "loading"
 
-### #4 — Add `bpy` to the sidecar and report version
+### #4 — Bundle thin sidecar as `sidecar.exe` via PyInstaller
 
 **Tasks**
-- Add `bpy==4.2.x` to `pyproject.toml`
-- Update `system.ping` to also return `bpy_version`
-- Document install pain points in HANDOFF.md (wheel size, Python version requirement)
-
-**Acceptance**
-- [ ] App startup shows "bpy 4.x.x ready"
-- [ ] `python -c "import bpy; print(bpy.app.version_string)"` works in sidecar's venv
-
-### #5 — Bundle sidecar as `sidecar.exe` via PyInstaller
-
-**Tasks**
-- `scripts/build-sidecar.ps1` runs `pyinstaller --onefile --collect-all bpy main.py`
+- `scripts/build-sidecar.ps1` runs `pyinstaller --onefile main.py` (NO bpy, no `--collect-all` heaviness — just `requests`, `keyring`, stdlib)
 - Test the resulting `sidecar.exe` standalone (no Python install needed)
-- Update `tauri.conf.json` to point at the produced exe
-- `cargo tauri build` produces a working installer that includes the sidecar
+- Update `tauri.conf.json` to reference the produced exe
+- `cargo tauri build` produces a working installer including the sidecar
 
 **Acceptance**
 - [ ] Built installer runs on a clean Win11 VM with no Python installed
-- [ ] App still shows "bpy 4.x.x ready"
+- [ ] App still shows "Sidecar: pong"
+- [ ] Installer size < 75 MB
 
 ---
 
-## Phase C — Mock pipeline
+## Phase C — First-run wizard
 
-### #6 — Five-screen routing skeleton
+### #5 — Wizard scaffolding + state persistence
 
 **Tasks**
-- React Router (or Tanstack Router) with routes for the 5 screens
-- Each screen renders a placeholder ("New Project — coming soon") + a `Next` button to advance
-- Top-level state machine in `lib/projectState.ts` (current screen, project draft)
+- New route `/wizard` that runs on first launch (or whenever `settings.json` is missing/incomplete)
+- 5-step linear flow with "Back" / "Next" buttons; each step renders a child component from `WizardSteps/`
+- State persists to `%LOCALAPPDATA%\VasePipe\settings.json` after each successful step (so closing app mid-wizard resumes where you left off)
 
 **Acceptance**
-- [ ] Click through all 5 screens via the Next buttons
+- [ ] First launch shows wizard
+- [ ] Subsequent launches skip wizard if all 5 steps green
+- [ ] Force re-run via app menu
 
-### #7 — Mock Meshy commands in sidecar
+### #6 — `wizard.detect_blender`
+
+**Tasks**
+- Sidecar command checks default install path, Microsoft Store, registry
+- Returns `{found, path, version}`
+- Frontend step 1: shows result, "Re-check" button if not found, "Download Blender LTS" button (opens browser)
+
+**Acceptance**
+- [ ] Detection succeeds on a machine with Blender 4.2+ at default path
+- [ ] Returns `found: false` cleanly on a machine without Blender
+- [ ] Version string parses correctly
+
+### #7 — Bundle BlenderMCP addon as `resources/blender_mcp_addon.zip`
+
+**Tasks**
+- `scripts/package-addon.ps1` zips the BlenderMCP addon source from a known location
+- Tauri resource registration so the zip ships in the installer
+- Sidecar exposes `wizard.install_addon` that extracts the zip into `%APPDATA%\Blender Foundation\Blender\<version>\scripts\addons\`
+
+**Acceptance**
+- [ ] Zip embedded in installer
+- [ ] After install, the addon files appear in the user's Blender addons dir
+- [ ] Blender's Edit → Preferences → Add-ons shows BlenderMCP enabled (manual user step OK in v1)
+
+### #8 — `wizard.test_socket`
+
+**Tasks**
+- Sidecar command opens TCP to `127.0.0.1:9876`, sends a no-op ping, validates response
+- Returns `{connected, error?}`
+- Frontend step 3: instructs user to click "Connect to Claude" in Blender's BlenderMCP tab; "Test connection" button on success → green check
+
+**Acceptance**
+- [ ] Returns connected=true when Blender + addon are running and connected
+- [ ] Returns descriptive error otherwise (timeout vs refused vs no addon)
+
+### #9 — `wizard.detect_bambu` + Meshy key entry
+
+**Tasks**
+- Detect Bambu Studio at default path; if missing, file browse dialog
+- Frontend step 5: password input for Meshy key, calls `system.set_meshy_key`
+- Persist Bambu path to `settings.json`
+
+**Acceptance**
+- [ ] Bambu detected on machines with default install
+- [ ] Meshy key written to Windows Credential Manager (verify with `cmdkey /list`)
+- [ ] Wizard hits "All set" screen; New Project route accessible
+
+---
+
+## Phase D — Mock pipeline
+
+### #10 — Five-screen routing skeleton (post-wizard)
+
+**Tasks**
+- React Router (or Tanstack Router) with routes for the 5 main screens + wizard
+- Each screen renders a placeholder + a `Next` button
+- Top-level state machine in `lib/projectState.ts`
+
+**Acceptance**
+- [ ] Click through Wizard → New Project → Generate → PreviewPick → Editor → Export
+
+### #11 — Mock Meshy commands in sidecar
 
 **Tasks**
 - `meshy.generate_preview` returns a fake task_id
 - `meshy.poll_task` returns SUCCEEDED on the third call, with URLs pointing at `tests/fixtures/sample_vase.glb`
 - `meshy.refine` similar
-- Source the fixture GLB from a previous Meshy run (1-2 MB)
+- Source the fixture GLBs from real Meshy runs (vase + guitar — both bundled)
 
 **Acceptance**
 - [ ] Frontend `Generate` screen polls and lands on `PreviewPick` with a thumbnail
 - [ ] No network calls
 
-### #8 — Three.js GLB preview component
+### #12 — Three.js GLB preview component
 
 **Tasks**
 - `<ThreePreview src={glbPath} />` using `@react-three/fiber` + `useGLTF`
@@ -110,89 +162,104 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 **Acceptance**
 - [ ] PreviewPick screen shows the fixture GLB rendered in 3D
 - [ ] Editor screen shows the same GLB
+- [ ] Switching fixtures (vase → guitar) triggers re-render correctly
 
-### #9 — Mock `edit.apply_chain` and Editor wiring
+### #13 — Mock `edit.apply_chain` and Editor wiring
 
 **Tasks**
-- Sidecar mock returns the same fixture + a stub sanity report
-- Editor's parameter form wired to `edits` list in state
+- Sidecar mock returns the fixture + a stub sanity report
+- Editor parameter form wired to `edits` list in state
 - Apply button calls `edit.apply_chain` and reloads the preview
 - Sanity panel renders the 4 lights from the response
 
 **Acceptance**
-- [ ] Full click-through Prompt → Preview → Editor → Export in < 20 s using mocks only
+- [ ] Full click-through Wizard → Prompt → Preview → Editor → Export in < 30 s using mocks only
 
 ---
 
-## Phase D — Real Blender ops
+## Phase E — Real Blender ops via MCP
 
-### #10 — Port `voxel_remesh` and `keep_largest_component`
+### #14 — `blender_client.py` TCP socket client
+
+**Tasks**
+- Async TCP client: connect to `:9876`, send JSON, read JSON response
+- Wraps `execute_blender_code` with reasonable timeout (30s default, 120s for heavy ops)
+- Reconnect on connection loss with retry budget (3 attempts, exponential backoff)
+
+**Acceptance**
+- [ ] Sends a Python snippet, receives `print()` output back
+- [ ] Detects socket close, surfaces "BlenderConnectionError"
+
+### #15 — Port `voxel_remesh` and `keep_largest_component` ops
 
 **Tasks**
 - Translate from `docs/pipeline.md` Phase 6
-- Pure function: takes path, applies op, writes new GLB, returns dims/sanity
-- pytest covers a known-good fixture
+- Each op = a Python source string template with parameter substitution
+- Sent via `blender_client` to Blender; response includes new mesh stats
+- pytest covers both fixtures
 
 **Acceptance**
-- [ ] Test passes against `sample_vase.glb`
+- [ ] Test passes against `sample_vase.glb` and `sample_guitar.glb`
 - [ ] Output mesh: 1 component, 0 boundary edges
+- [ ] Voxel remesh on guitar (after scale step from #16) produces < 200k faces (proves scale ordering)
 
-### #11 — Port `scale_to_height`, `recenter_xy`, `flat_bottom`
+### #16 — Port `scale_to_longest`, `recenter_xy`, `flat_bottom`
 
 **Acceptance**
-- [ ] Output dims match target height ± 0.1mm
+- [ ] Output longest dim matches target ± 0.1mm
 - [ ] Bottom Z is 0 ± 0.001mm
 - [ ] Bounding box centered at X=0, Y=0
 
-### #12 — Port `fix_normals` (volume-sign check + flip if negative)
+### #17 — Port `fix_normals` (volume-sign check + flip if negative)
 
 **Acceptance**
 - [ ] Signed volume positive after this op for any input
 
-### #13 — Port `open_top` + `bridge_top_loops`
+### #18 — Port `decimate`
+
+**Tasks**
+- Decimate modifier with COLLAPSE method, target face count param
+- Apply modifier, return new face count
+- For voxel-remeshed inputs, expected ratio is < 0.1
 
 **Acceptance**
-- [ ] Input watertight → Output watertight
-- [ ] Top has been opened and bridged (no boundary edges)
+- [ ] Input 2.7M faces → output ≤ 60k (target 50k)
+- [ ] Sanity preserved (manifold, single component, normals)
 
-### #14 — Port `color_split` (zebra and quarter modes via Boolean Intersect)
+### #19 — Port `open_top` + `bridge_top_loops` (vase-only, gated by object_type)
+
+**Acceptance**
+- [ ] When `object_type == "vase"`: top opened, then bridged, output watertight
+- [ ] When `object_type == "solid_decorative"`: ops skip cleanly, mesh unchanged
+
+### #20 — Port `color_split` (zebra and quarter modes via Boolean Intersect)
 
 **Tasks**
 - Zebra: bisect into N horizontal bands, alternate red/yellow, group into 2 objects, apply materials
 - Quarter: 4 cutter cubes via Boolean EXACT, intersect each band, regroup
 
 **Acceptance**
-- [ ] Zebra count=8: 2 output meshes, both manifold, total volume within 1% of input
-- [ ] Quarter: 4 wedges per color (8 outputs), each manifold, volume sum within 1%
+- [ ] Zebra count=8 on vase: 2 output meshes, both manifold, total volume within 1% of input
+- [ ] Quarter on vase: 4 wedges per color (8 outputs), each manifold, volume sum within 1%
+- [ ] Editor warning shows when user picks Zebra/Quarter and `object_type != vase`
 
-### #15 — Wire real `edit.apply_chain` end-to-end
+### #21 — Wire real `edit.apply_chain` end-to-end
 
 **Tasks**
-- Replace mock in `orchestrator.py` with real ops
+- Replace mock in `orchestrator.py` with real op chain dispatch via `blender_client`
 - Each chain run writes `<project>/preview.glb` for the frontend
 - Sanity output reflects real measurements
+- Auto-clean order enforced: scale → voxel → keep largest → recenter → flat bottom → fix normals → decimate → (vase: open_top + bridge) → (color_split)
 
 **Acceptance**
-- [ ] Frontend Editor produces real results from fixture GLB
-- [ ] Apply round-trip < 5 s for a 50k-poly mesh
+- [ ] Frontend Editor produces real results from both fixture GLBs
+- [ ] Apply round-trip < 8 s for a 50k-poly mesh on a typical dev machine
 
 ---
 
-## Phase E — Real Meshy
+## Phase F — Real Meshy
 
-### #16 — Settings screen + keyring storage for Meshy key
-
-**Tasks**
-- Settings dialog accessible from app menu
-- "Meshy API key" field, saved via `keyring.set_password("vasepipe", "meshy_api_key", value)`
-- `system.health` reports `meshy_key_set: true/false`
-- First-run modal if key missing
-
-**Acceptance**
-- [ ] Save key, restart app, `system.health` reports key present
-- [ ] Wipe key via `cmdkey /delete:vasepipe` → first-run modal reappears
-
-### #17 — Real Meshy API client
+### #22 — Real Meshy API client
 
 **Tasks**
 - `sidecar/meshy.py`: replace mocks with real HTTPS calls
@@ -207,12 +274,12 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 
 ---
 
-## Phase F — Export + slicer launch
+## Phase G — Export + slicer launch
 
-### #18 — `export.stl` writes per-color STLs
+### #23 — `export.stl` writes per-color STLs
 
 **Tasks**
-- `sidecar/pipeline/export_stl.py` ports the binary STL export from pipeline doc
+- `sidecar/ops/export_stl.py` ports the binary STL export from pipeline doc
 - Color split none → 1 STL; zebra → 2; quarter → 8
 - All filenames share the project's run timestamp stem
 
@@ -220,12 +287,12 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 - [ ] STL files appear under `<project>/` with predictable names
 - [ ] Each STL is binary (header doesn't start with `solid`), mm units
 
-### #19 — `slicer.launch` for Bambu Studio
+### #24 — `slicer.launch` for Bambu Studio
 
 **Tasks**
 - `sidecar/slicer.py`: spawns Bambu Studio with file args
-- Reads slicer path from settings; if missing, returns error code that frontend handles by opening Settings
-- Persist resolved path
+- Reads slicer path from settings (set in wizard)
+- If path missing at runtime, returns error code that frontend handles by opening Settings
 
 **Acceptance**
 - [ ] Hitting Export opens Bambu Studio with all STLs loaded
@@ -233,9 +300,9 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 
 ---
 
-## Phase G — Persistence
+## Phase H — Persistence
 
-### #20 — `<name>.vasepipe.json` save/load
+### #25 — `<name>.vasepipe.json` save/load
 
 **Tasks**
 - Schema in `lib/types.ts` mirrored by `sidecar/orchestrator.py`
@@ -248,15 +315,27 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 
 ---
 
-## Phase H — Polish + ship
+## Phase I — Polish + ship
 
-### #21 — App icon, splash, About dialog
+### #26 — Connection badge + Reconnect dialog
+
+**Tasks**
+- Status bar shows green/red Blender socket badge, polls `wizard.test_socket` every 5 s
+- Click the badge → modal with "Reconnect" button + instructions
+- Block edit chain runs when red
+
+**Acceptance**
+- [ ] Quit Blender mid-session → badge goes red within 5 s
+- [ ] Reopen Blender, click Connect to Claude → badge goes green
+- [ ] Editor Apply blocked while red, with clear message
+
+### #27 — App icon, splash, About dialog
 
 **Acceptance**
 - [ ] Custom icon visible in installer, taskbar, alt-tab
 - [ ] About dialog shows version + build date
 
-### #22 — Crash handler + structured logging
+### #28 — Crash handler + structured logging
 
 **Tasks**
 - Sidecar stderr piped to `%LOCALAPPDATA%\VasePipe\logs\<timestamp>.log`
@@ -266,9 +345,9 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 - [ ] Force a sidecar crash; log file contains stack trace
 - [ ] User can copy diagnostic and paste into a bug report
 
-### #23 — Final acceptance run
+### #29 — Final acceptance run
 
-Run the full checklist in `PROMPT.md` § 9 on a clean Win11 VM. Tag v1.0.0 if all green.
+Run the full checklist in `PROMPT.md` § 9 on a clean Win11 VM (one with Blender pre-installed, one without). Tag v1.0.0 if all green.
 
 ---
 
@@ -283,3 +362,4 @@ Run the full checklist in `PROMPT.md` § 9 on a clean Win11 VM. Tag v1.0.0 if al
 - Auto-update
 - Telemetry + crash reporting service
 - Project gallery / cloud sync
+- Auto-installer for Blender (the wizard currently links the user to the Blender download page)
