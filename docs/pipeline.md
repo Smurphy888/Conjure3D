@@ -1,6 +1,8 @@
 # 3D-Print Pipeline Spec
 
-Canonical description of what each phase of the pipeline does. The VasePipe app is a UI wrapper around this. Edits to the pipeline are edits to this file first; code follows.
+Canonical description of what each phase of the pipeline does. The Conjure3D app is a UI wrapper around this. Edits to the pipeline are edits to this file first; code follows.
+
+The pipeline is **object-agnostic** — it handles vases, decorative figurines, flat parts, anything the user can describe that fits the build plate. Object-specific behavior (e.g. opening the top of a vase) is gated on the `object_type` field; see § "object_type — what's gated" below.
 
 ## Tools
 
@@ -10,10 +12,54 @@ Canonical description of what each phase of the pipeline does. The VasePipe app 
 
 ## Environment
 
-- Meshy API key in Windows Credential Manager (service `vasepipe`, account `meshy_api_key`)
-- Working dir: `%LOCALAPPDATA%\VasePipe\projects\<name>\`
-- File stem per run: `<object_type>_{YYYYMMDD-HHMMSS}` — e.g. `vase_20260430-132930`, `guitar_20260503-050932`. All artifacts share it.
+- Meshy API key in Windows Credential Manager (service `conjure3d`, account `meshy_api_key`)
+- Working dir: `%LOCALAPPDATA%\Conjure3D\projects\<slug>\`
+- File stem per run: `<slug>_{YYYYMMDD-HHMMSS}.{ext}`. See § "File stem convention" below.
 - Blender must be running with BlenderMCP socket on `:9876` listening. Pipeline aborts if it isn't.
+
+## File stem convention
+
+All artifacts produced for a single project share a stem:
+
+    <slug>_{YYYYMMDD-HHMMSS}.{ext}
+
+The slug is derived from the user-provided project name via these rules (applied in order):
+
+1. Lowercase
+2. Replace whitespace and underscores with `-`
+3. Strip everything that isn't `[a-z0-9-]` (kills emoji, symbols, non-Latin scripts, punctuation)
+4. Collapse runs of `-` into a single `-`
+5. Trim leading and trailing `-`
+6. Truncate to 40 characters
+7. If empty after all that, fall back to `model`
+
+Examples:
+
+| Input | Slug |
+|---|---|
+| "Stylized minimalist vase" | `stylized-minimalist-vase` |
+| "Mom's birthday 2026 ❤️" | `moms-birthday-2026` |
+| "Travel guitar v3" | `travel-guitar-v3` |
+| "🎸🎸🎸" | `model` |
+| "" | `model` |
+
+The project's display name (original capitalization, spaces, emojis) is preserved as-is in the `.conjure3d.json` metadata and used in the UI. Only the on-disk filename uses the slug.
+
+Reference Python implementation:
+
+```python
+import re
+
+def slugify(name: str, fallback: str = "model", max_len: int = 40) -> str:
+    s = name.lower()
+    s = re.sub(r'[\s_]+', '-', s)         # whitespace + underscore → -
+    s = re.sub(r'[^a-z0-9-]', '', s)      # strip everything else
+    s = re.sub(r'-+', '-', s).strip('-')  # collapse + trim
+    s = s[:max_len].rstrip('-')           # truncate, trim trailing - if truncation left one
+    return s if s else fallback
+```
+
+A TypeScript twin lives in `src/lib/slugify.ts`. They must produce byte-identical output for the same inputs (covered by tests).
 
 ## Phases
 
@@ -48,7 +94,7 @@ Canonical description of what each phase of the pipeline does. The VasePipe app 
 
 After each edit, render a screenshot. Run sanity checks: manifold (0 boundary, 0 multi-face, 0 wire edges), single component (or expected count for color splits), normals consistent (signed volume > 0), longest dim ≤ 256 mm. Loop until user says "good."
 
-**Phase 7 — Export STL.** Binary STL, mm units (`global_scale=1000`), one file per output object. Verify each file size > 0.
+**Phase 7 — Export STL.** Binary STL, mm units (`global_scale=1000`), one file per output object, named per the file stem convention. Verify each file size > 0.
 
 **Phase 8 — Hand off to Bambu Studio.** `Start-Process` with the STL path(s). Display printer profile (X1C), filament (PLA, 0.20 mm), and the **shape-aware slicer recipe** (see below). Do not click Print.
 
@@ -72,21 +118,46 @@ After each edit, render a screenshot. Run sanity checks: manifold (0 boundary, 0
 ## MODEL SPEC (per-print parameters)
 
 ```yaml
-prompt: "Stylized minimalist geometric vase, single watertight mesh,
-         smooth surfaces, flat bottom, no support needed, ~80mm tall."
-art_style: realistic        # realistic | sculpture | low-poly | cartoon
-object_type: vase           # vase | solid_decorative | flat_part — gates auto-clean steps
-target_height_mm: 80        # interpreted as longest dim (vase: height; guitar: length)
+name: "<user-typed display name>"   # shown in UI; slug derives from this
+prompt: "<user description of what to print>"
+art_style: realistic                # realistic | sculpture | low-poly | cartoon
+object_type: vase                   # vase | solid_decorative | flat_part — gates auto-clean steps
+target_height_mm: 80                # interpreted as longest dim
 flat_bottom: true
 decimate_target_faces: 50000
-printer: X1C                # X1C | P2S
+printer: X1C                        # X1C | P2S
 filament_note: "PLA, 0.20mm layer, default Bambu profile"
 color_split:
-  mode: none                # none | zebra | quarter
+  mode: none                        # none | zebra | quarter
   zebra:
-    count: 8                # number of horizontal bands
-    axis: z                 # z | x | y
-  colors: [red, yellow]     # used when mode != none
+    count: 8                        # number of horizontal bands
+    axis: z                         # z | x | y
+  colors: [red, yellow]             # used when mode != none
+```
+
+### Examples
+
+```yaml
+# A — hollow rotational form
+name: "Geometric vase"
+prompt: "Stylized minimalist geometric vase, single watertight mesh, smooth surfaces, flat bottom, no support needed, ~80mm tall."
+object_type: vase
+target_height_mm: 80
+color_split: { mode: none }
+
+# B — solid decorative figurine
+name: "Mini Strat"
+prompt: "Stylized solid-body electric guitar, Stratocaster silhouette, flat back, no support needed, ~200mm long. Frets and strings as embossed surface detail only."
+object_type: solid_decorative
+target_height_mm: 200
+color_split: { mode: none }
+
+# C — flat part
+name: "Star coaster"
+prompt: "Hexagonal coaster with embossed five-pointed star pattern, flat bottom, ~95mm wide, 4mm thick."
+object_type: flat_part
+target_height_mm: 95
+color_split: { mode: none }
 ```
 
 ### object_type — what's gated
@@ -152,7 +223,11 @@ Display the matching block in the Export screen based on `object_type`.
 - **Sub-mm features get melted** by voxel remesh @ 0.8 mm — strings, fine frets, jewelry chains. Recommend regenerating with prompt language that suppresses thin geometry ("strings as embossed surface detail only"), or drop voxel size to 0.5 mm at higher face count.
 - **No support generation** in Blender — orientation is the only support strategy. Auto-clean assumes flat-bottom orientation.
 
-## Lessons from prototype runs
+## Validation runs (test fixtures)
 
-- **Vase run** (`vase_20260430-132930`): 80 mm tall, 8-band zebra, then quartered. Validated: voxel remesh, keep-largest, normal flip, top open + bridge, zebra, quartering via Boolean.
-- **Guitar run** (`guitar_20260503-050932`): 200 mm long, solid decorative, no color split. Validated: object_type gating (skip open_top), scale-before-voxel-remesh ordering, decimate step. **First run skipped scale before voxel remesh** → 2.7M faces. Decimate to 50k after the fact recovered, but order was the lesson.
+The two GLBs in `sidecar/tests/fixtures/` come from real prototype runs and exist to exercise different code paths through the pipeline. They are **not** the product target — Conjure3D handles any object the user describes.
+
+- **`sample_vase.glb`** — 80 mm hollow geometric vase. Tests the vase-specific path: `open_top` + `bridge_top_loops` + zebra color split + Boolean quartering. Exposed: voxel remesh fixing 814-component mesh-soup; signed volume sign trap; T-junction artifacts when bisect+fill perpendicular to multi-component meshes.
+- **`sample_guitar.glb`** — 200 mm solid Strat-style decorative model. Tests the non-vase path: skip `open_top` + `bridge`. Exposed: scale-must-run-before-voxel-remesh ordering (without it: 2.7 M faces); decimate as required auto-clean step; sub-mm feature loss (strings melted into surface).
+
+Both fixtures must pass acceptance tests end-to-end before tagging a release.

@@ -37,9 +37,9 @@ Thumbs.db
 desktop.ini
 
 # Local user data (should never be in repo)
-*.vasepipe
-*.vasepipe.json
-*.vasepipe/
+*.conjure3d
+*.conjure3d.json
+*.conjure3d/
 *.glb
 *.stl
 *.log

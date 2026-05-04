@@ -8,19 +8,19 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 
 ### #1 — Scaffold Tauri + React + Vite
 
-**Goal:** `cargo tauri dev` opens a window showing "VasePipe v0.0.1". `cargo tauri build` produces `VasePipe-Setup.exe`.
+**Goal:** `cargo tauri dev` opens a window showing "Conjure3D v0.0.1". `cargo tauri build` produces `Conjure3D-Setup.exe`.
 
 **Tasks**
 - `pnpm create tauri-app` → React + TypeScript + Vite template
-- Set product name, identifier (`com.vasepipe.app`), window size (1280x800)
+- Set product name, identifier (`com.conjure3d.app`), window size (1280x800)
 - Replace boilerplate with a single centered `<h1>` showing version
 - Configure NSIS bundler in `tauri.conf.json` (Windows-only target)
 - Verify the produced installer runs on a clean machine
 
 **Acceptance**
 - [ ] `pnpm install` clean
-- [ ] `cargo tauri dev` opens window with "VasePipe v0.0.1"
-- [ ] `cargo tauri build` produces `src-tauri/target/release/bundle/nsis/VasePipe-Setup.exe`
+- [ ] `cargo tauri dev` opens window with "Conjure3D v0.0.1"
+- [ ] `cargo tauri build` produces `src-tauri/target/release/bundle/nsis/Conjure3D-Setup.exe`
 - [ ] Installer runs, app launches, window appears
 
 ---
@@ -63,23 +63,35 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 - [ ] App still shows "Sidecar: pong"
 - [ ] Installer size < 75 MB
 
+### #5 — Slugify utility (Python + TS twins)
+
+**Tasks**
+- `sidecar/slugify.py`: `slugify(name, fallback="model", max_len=40) -> str` per spec in `docs/pipeline.md`
+- `src/lib/slugify.ts`: same logic, same outputs
+- `sidecar/main.py` exposes `util.slugify` so the frontend can preview the slug live as the user types the project name
+- Tests: `test_slugify.py` (Python) and `slugify.test.ts` (Vitest) both run a 12-row table of inputs and assert identical outputs
+
+**Acceptance**
+- [ ] Python and TS slugify produce byte-identical output for the test table
+- [ ] Edge cases handled: empty string, emoji-only, very long string, leading/trailing whitespace, special chars
+
 ---
 
 ## Phase C — First-run wizard
 
-### #5 — Wizard scaffolding + state persistence
+### #6 — Wizard scaffolding + state persistence
 
 **Tasks**
 - New route `/wizard` that runs on first launch (or whenever `settings.json` is missing/incomplete)
 - 5-step linear flow with "Back" / "Next" buttons; each step renders a child component from `WizardSteps/`
-- State persists to `%LOCALAPPDATA%\VasePipe\settings.json` after each successful step (so closing app mid-wizard resumes where you left off)
+- State persists to `%LOCALAPPDATA%\Conjure3D\settings.json` after each successful step (so closing app mid-wizard resumes where you left off)
 
 **Acceptance**
 - [ ] First launch shows wizard
 - [ ] Subsequent launches skip wizard if all 5 steps green
 - [ ] Force re-run via app menu
 
-### #6 — `wizard.detect_blender`
+### #7 — `wizard.detect_blender`
 
 **Tasks**
 - Sidecar command checks default install path, Microsoft Store, registry
@@ -91,7 +103,7 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 - [ ] Returns `found: false` cleanly on a machine without Blender
 - [ ] Version string parses correctly
 
-### #7 — Bundle BlenderMCP addon as `resources/blender_mcp_addon.zip`
+### #8 — Bundle BlenderMCP addon as `resources/blender_mcp_addon.zip`
 
 **Tasks**
 - `scripts/package-addon.ps1` zips the BlenderMCP addon source from a known location
@@ -103,7 +115,7 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 - [ ] After install, the addon files appear in the user's Blender addons dir
 - [ ] Blender's Edit → Preferences → Add-ons shows BlenderMCP enabled (manual user step OK in v1)
 
-### #8 — `wizard.test_socket`
+### #9 — `wizard.test_socket`
 
 **Tasks**
 - Sidecar command opens TCP to `127.0.0.1:9876`, sends a no-op ping, validates response
@@ -114,7 +126,7 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 - [ ] Returns connected=true when Blender + addon are running and connected
 - [ ] Returns descriptive error otherwise (timeout vs refused vs no addon)
 
-### #9 — `wizard.detect_bambu` + Meshy key entry
+### #10 — `wizard.detect_bambu` + Meshy key entry
 
 **Tasks**
 - Detect Bambu Studio at default path; if missing, file browse dialog
@@ -130,7 +142,7 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 
 ## Phase D — Mock pipeline
 
-### #10 — Five-screen routing skeleton (post-wizard)
+### #11 — Five-screen routing skeleton (post-wizard)
 
 **Tasks**
 - React Router (or Tanstack Router) with routes for the 5 main screens + wizard
@@ -140,19 +152,19 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 **Acceptance**
 - [ ] Click through Wizard → New Project → Generate → PreviewPick → Editor → Export
 
-### #11 — Mock Meshy commands in sidecar
+### #12 — Mock Meshy commands in sidecar
 
 **Tasks**
 - `meshy.generate_preview` returns a fake task_id
-- `meshy.poll_task` returns SUCCEEDED on the third call, with URLs pointing at `tests/fixtures/sample_vase.glb`
+- `meshy.poll_task` returns SUCCEEDED on the third call, with URLs pointing at `tests/fixtures/sample_vase.glb` (dev toggle to switch to `sample_guitar.glb`)
 - `meshy.refine` similar
-- Source the fixture GLBs from real Meshy runs (vase + guitar — both bundled)
 
 **Acceptance**
 - [ ] Frontend `Generate` screen polls and lands on `PreviewPick` with a thumbnail
 - [ ] No network calls
+- [ ] Both fixture GLBs can be exercised by the dev toggle
 
-### #12 — Three.js GLB preview component
+### #13 — Three.js GLB preview component
 
 **Tasks**
 - `<ThreePreview src={glbPath} />` using `@react-three/fiber` + `useGLTF`
@@ -164,7 +176,7 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 - [ ] Editor screen shows the same GLB
 - [ ] Switching fixtures (vase → guitar) triggers re-render correctly
 
-### #13 — Mock `edit.apply_chain` and Editor wiring
+### #14 — Mock `edit.apply_chain` and Editor wiring
 
 **Tasks**
 - Sidecar mock returns the fixture + a stub sanity report
@@ -179,7 +191,7 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 
 ## Phase E — Real Blender ops via MCP
 
-### #14 — `blender_client.py` TCP socket client
+### #15 — `blender_client.py` TCP socket client
 
 **Tasks**
 - Async TCP client: connect to `:9876`, send JSON, read JSON response
@@ -190,7 +202,7 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 - [ ] Sends a Python snippet, receives `print()` output back
 - [ ] Detects socket close, surfaces "BlenderConnectionError"
 
-### #15 — Port `voxel_remesh` and `keep_largest_component` ops
+### #16 — Port `voxel_remesh` and `keep_largest_component` ops
 
 **Tasks**
 - Translate from `docs/pipeline.md` Phase 6
@@ -201,21 +213,21 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 **Acceptance**
 - [ ] Test passes against `sample_vase.glb` and `sample_guitar.glb`
 - [ ] Output mesh: 1 component, 0 boundary edges
-- [ ] Voxel remesh on guitar (after scale step from #16) produces < 200k faces (proves scale ordering)
+- [ ] Voxel remesh on guitar (after scale step from #17) produces < 200k faces (proves scale ordering)
 
-### #16 — Port `scale_to_longest`, `recenter_xy`, `flat_bottom`
+### #17 — Port `scale_to_longest`, `recenter_xy`, `flat_bottom`
 
 **Acceptance**
 - [ ] Output longest dim matches target ± 0.1mm
 - [ ] Bottom Z is 0 ± 0.001mm
 - [ ] Bounding box centered at X=0, Y=0
 
-### #17 — Port `fix_normals` (volume-sign check + flip if negative)
+### #18 — Port `fix_normals` (volume-sign check + flip if negative)
 
 **Acceptance**
 - [ ] Signed volume positive after this op for any input
 
-### #18 — Port `decimate`
+### #19 — Port `decimate`
 
 **Tasks**
 - Decimate modifier with COLLAPSE method, target face count param
@@ -226,13 +238,13 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 - [ ] Input 2.7M faces → output ≤ 60k (target 50k)
 - [ ] Sanity preserved (manifold, single component, normals)
 
-### #19 — Port `open_top` + `bridge_top_loops` (vase-only, gated by object_type)
+### #20 — Port `open_top` + `bridge_top_loops` (vase-only, gated by object_type)
 
 **Acceptance**
 - [ ] When `object_type == "vase"`: top opened, then bridged, output watertight
 - [ ] When `object_type == "solid_decorative"`: ops skip cleanly, mesh unchanged
 
-### #20 — Port `color_split` (zebra and quarter modes via Boolean Intersect)
+### #21 — Port `color_split` (zebra and quarter modes via Boolean Intersect)
 
 **Tasks**
 - Zebra: bisect into N horizontal bands, alternate red/yellow, group into 2 objects, apply materials
@@ -243,7 +255,7 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 - [ ] Quarter on vase: 4 wedges per color (8 outputs), each manifold, volume sum within 1%
 - [ ] Editor warning shows when user picks Zebra/Quarter and `object_type != vase`
 
-### #21 — Wire real `edit.apply_chain` end-to-end
+### #22 — Wire real `edit.apply_chain` end-to-end
 
 **Tasks**
 - Replace mock in `orchestrator.py` with real op chain dispatch via `blender_client`
@@ -259,7 +271,7 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 
 ## Phase F — Real Meshy
 
-### #22 — Real Meshy API client
+### #23 — Real Meshy API client
 
 **Tasks**
 - `sidecar/meshy.py`: replace mocks with real HTTPS calls
@@ -276,18 +288,18 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 
 ## Phase G — Export + slicer launch
 
-### #23 — `export.stl` writes per-color STLs
+### #24 — `export.stl` writes per-color STLs with slug naming
 
 **Tasks**
 - `sidecar/ops/export_stl.py` ports the binary STL export from pipeline doc
+- Filenames use `<slug>_<ts>.stl` (no color split) or `<slug>_<ts>_<color>.stl` (color split)
 - Color split none → 1 STL; zebra → 2; quarter → 8
-- All filenames share the project's run timestamp stem
 
 **Acceptance**
-- [ ] STL files appear under `<project>/` with predictable names
+- [ ] STL files appear under `<slug>.conjure3d/` with predictable names
 - [ ] Each STL is binary (header doesn't start with `solid`), mm units
 
-### #24 — `slicer.launch` for Bambu Studio
+### #25 — `slicer.launch` for Bambu Studio
 
 **Tasks**
 - `sidecar/slicer.py`: spawns Bambu Studio with file args
@@ -302,7 +314,7 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 
 ## Phase H — Persistence
 
-### #25 — `<name>.vasepipe.json` save/load
+### #26 — `<slug>.conjure3d.json` save/load
 
 **Tasks**
 - Schema in `lib/types.ts` mirrored by `sidecar/orchestrator.py`
@@ -317,7 +329,7 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 
 ## Phase I — Polish + ship
 
-### #26 — Connection badge + Reconnect dialog
+### #27 — Connection badge + Reconnect dialog
 
 **Tasks**
 - Status bar shows green/red Blender socket badge, polls `wizard.test_socket` every 5 s
@@ -329,23 +341,23 @@ Ordered by build phase. Each issue is one PR. Do not skip ahead — phases compo
 - [ ] Reopen Blender, click Connect to Claude → badge goes green
 - [ ] Editor Apply blocked while red, with clear message
 
-### #27 — App icon, splash, About dialog
+### #28 — App icon, splash, About dialog
 
 **Acceptance**
 - [ ] Custom icon visible in installer, taskbar, alt-tab
 - [ ] About dialog shows version + build date
 
-### #28 — Crash handler + structured logging
+### #29 — Crash handler + structured logging
 
 **Tasks**
-- Sidecar stderr piped to `%LOCALAPPDATA%\VasePipe\logs\<timestamp>.log`
+- Sidecar stderr piped to `%LOCALAPPDATA%\Conjure3D\logs\<timestamp>.log`
 - "Copy diagnostic" button copies last 200 log lines + project state to clipboard
 
 **Acceptance**
 - [ ] Force a sidecar crash; log file contains stack trace
 - [ ] User can copy diagnostic and paste into a bug report
 
-### #29 — Final acceptance run
+### #30 — Final acceptance run
 
 Run the full checklist in `PROMPT.md` § 9 on a clean Win11 VM (one with Blender pre-installed, one without). Tag v1.0.0 if all green.
 

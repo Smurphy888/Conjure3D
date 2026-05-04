@@ -1,12 +1,14 @@
-# VasePipe — Build Prompt
+# Conjure3D — Build Prompt
 
 **Paste the contents of this file into a fresh Claude Code session running with this repo as the working directory.** The agent will read `docs/pipeline.md` as ground truth for the geometry operations.
 
 ---
 
-You are building **VasePipe** — a standalone Windows desktop app that turns a text description into a sliceable, multi-color 3D-print file with one human checkpoint in the middle and one at the end. Built for "you + a few family/friends" — meaning the install must work cleanly on a machine you've never seen, with a wizard that detects/installs prerequisites. Ships as a Windows installer (`VasePipe-Setup.exe`) that installs the app + a thin Python sidecar; user double-clicks an icon to launch.
+You are building **Conjure3D** — a standalone Windows desktop app that turns a text description into a sliceable 3D-print file. Object-agnostic: vases, decorative figurines, flat parts — anything the user can describe that fits within a 256 mm cube on the X1C build plate. Built for "you + a few family/friends" — meaning the install must work cleanly on a machine you've never seen, with a wizard that detects/installs prerequisites. Ships as a Windows installer (`Conjure3D-Setup.exe`) that installs the app + a thin Python sidecar; user double-clicks an icon to launch.
 
 The app is a UI wrapper around an already-proven pipeline documented in `docs/pipeline.md`. That pipeline is the ground truth for what each stage does — port the Python operations from it verbatim where possible.
+
+The two GLBs in `sidecar/tests/fixtures/` (`sample_vase.glb`, `sample_guitar.glb`) are **diverse-shape test fixtures**, not the product target. They exercise the vase-specific path (open_top + bridge) and the non-vase path (skip both). Both must pass end-to-end.
 
 Read `docs/pipeline.md`, `README.md`, and `HANDOFF.md` before writing any code.
 
@@ -53,7 +55,7 @@ External runtime dependencies (the **user** installs these; wizard handles detec
 ## 3. Repo layout
 
 ```
-vasepipe/
+conjure3d/
 ├── src-tauri/                       # Tauri Rust shell
 │   ├── Cargo.toml
 │   ├── tauri.conf.json              # bundle config, sidecar + addon zip declared
@@ -77,7 +79,8 @@ vasepipe/
 │   │   └── WizardSteps/             # one component per wizard step
 │   ├── lib/
 │   │   ├── ipc.ts                   # typed Tauri invoke wrappers
-│   │   ├── project.ts               # load/save .vasepipe.json
+│   │   ├── project.ts               # load/save .conjure3d.json
+│   │   ├── slugify.ts               # file-stem sanitization (TS twin of sidecar/slugify.py)
 │   │   └── types.ts                 # shared TS types (mirror Python schema)
 │   └── styles.css
 ├── sidecar/                         # Python sidecar (becomes sidecar.exe)
@@ -87,6 +90,7 @@ vasepipe/
 │   ├── meshy.py                     # API client (generate, poll, refine, dl)
 │   ├── orchestrator.py              # replay full edit chain on demand
 │   ├── wizard.py                    # Blender detect, addon install, connection test
+│   ├── slugify.py                   # file-stem sanitization (Python twin of lib/slugify.ts)
 │   ├── ops/                         # Python source for each Blender op (sent over the wire)
 │   │   ├── __init__.py
 │   │   ├── import_glb.py
@@ -104,12 +108,13 @@ vasepipe/
 │   ├── resources/
 │   │   └── blender_mcp_addon.zip    # the BlenderMCP addon to install at first run
 │   └── tests/
-│       ├── test_pipeline.py         # pytest, runs against fixture GLB
+│       ├── test_pipeline.py         # pytest, runs against fixture GLBs
 │       ├── test_meshy_mock.py
+│       ├── test_slugify.py
 │       ├── test_wizard.py
 │       └── fixtures/
-│           ├── sample_vase.glb      # 1.6 MB test mesh (vase-shaped)
-│           └── sample_guitar.glb    # 0.8 MB test mesh (guitar-shaped, asymmetric)
+│           ├── sample_vase.glb      # 1.6 MB diverse-shape test fixture (vase-shaped)
+│           └── sample_guitar.glb    # 0.8 MB diverse-shape test fixture (guitar-shaped, asymmetric)
 ├── docs/
 │   └── pipeline.md                  # ground truth for geometry ops
 ├── scripts/
@@ -126,9 +131,9 @@ vasepipe/
 Each phase ends with a working app you can double-click. Don't skip ahead; parallel work tempts integration bugs.
 
 ### Phase A — Hello, Tauri (~½ day)
-- Scaffold Tauri + React app. `App.tsx` shows "VasePipe v0.0.1".
+- Scaffold Tauri + React app. `App.tsx` shows "Conjure3D v0.0.1".
 - `cargo tauri dev` opens a window. `cargo tauri build` produces a setup .exe.
-- **Acceptance:** `VasePipe-Setup.exe` in `src-tauri/target/release/bundle/nsis/` installs and launches.
+- **Acceptance:** `Conjure3D-Setup.exe` in `src-tauri/target/release/bundle/nsis/` installs and launches.
 
 ### Phase B — Thin sidecar plumbing (~½ day)
 - Python sidecar with one command: `system.ping → {ok: true, msg: "pong"}`.
@@ -153,7 +158,7 @@ Open TCP connection to `127.0.0.1:9876`. Send a no-op JSON-RPC ping. Confirm res
 Default path: `C:\Program Files\Bambu Studio\bambu-studio.exe`. If not present, prompt user to browse. Persist to settings.
 
 **C.5 — `wizard.set_meshy_key()`**
-Frontend collects key via password input. Sidecar saves with `keyring.set_password("vasepipe", "meshy_api_key", value)`. Verify write by reading back.
+Frontend collects key via password input. Sidecar saves with `keyring.set_password("conjure3d", "meshy_api_key", value)`. Verify write by reading back.
 
 - **Acceptance:** clean Win11 VM with Blender pre-installed → wizard runs to green; clean Win11 VM without Blender → wizard halts at step 1 with "Install Blender" link, user installs, re-checks, wizard continues.
 
@@ -161,7 +166,7 @@ Frontend collects key via password input. Sidecar saves with `keyring.set_passwo
 - All 5 main screens render with **fake data only** — no Meshy, no real Blender ops.
 - Sidecar commands return canned responses from fixtures:
   - `meshy.generate_preview` returns a fake task_id immediately
-  - `meshy.poll_task` returns SUCCEEDED on the third call with URLs that point at `tests/fixtures/sample_vase.glb`
+  - `meshy.poll_task` returns SUCCEEDED on the third call with URLs that point at `tests/fixtures/sample_vase.glb` (or `sample_guitar.glb` based on a dev toggle)
   - `edit.apply_chain` ignores params, returns the same fixture GLB and a stubbed sanity report
 - Three.js preview loads and shows the fixture GLB.
 - **Acceptance:** complete user flow click-through Wizard → New Project → Preview → Editor → Export in < 30 s using only fakes. No network, no real Blender ops.
@@ -170,7 +175,7 @@ Frontend collects key via password input. Sidecar saves with `keyring.set_passwo
 - Implement `ops/*.py` by porting code from `docs/pipeline.md`. Each op is a Python module with a `def code(params: dict) -> str:` function returning a Python source-code string to be sent via MCP socket.
 - `blender_client.py`: TCP socket client, sends `{"type":"execute_blender_code","code":"..."}`, parses results.
 - `orchestrator.apply_chain`: builds the full code from a list of op invocations, sends in chunks (avoid socket timeouts on long ops), writes intermediate `.preview.glb` for the frontend.
-- **Auto-clean ordering — critical:** scale → voxel remesh → keep largest → recenter → flat bottom → fix normals → decimate → (optional open_top for vase) → (optional bridge for vase). Order matters: voxel-remeshing an unscaled 2m mesh produces 2.7M faces. Always scale first.
+- **Auto-clean ordering — critical:** scale → voxel remesh → keep largest → recenter → flat bottom → fix normals → decimate → (optional open_top for vase) → (optional bridge for vase). Order matters: voxel-remeshing an unscaled 2 m mesh produces 2.7 M faces. Always scale first.
 - `pytest sidecar/tests/test_pipeline.py` runs against `sample_vase.glb` AND `sample_guitar.glb` and asserts sanity output (manifold, components==1, dim ≤ 256mm, volume positive). Both fixtures must pass; the guitar is the asymmetric stress test.
 - **Acceptance:** Editor in the running app produces real results from both fixture GLBs.
 
@@ -182,28 +187,28 @@ Frontend collects key via password input. Sidecar saves with `keyring.set_passwo
 - **Acceptance:** real prompt → real Meshy call → real GLB. Drop in a network kill switch (block `assets.meshy.ai` in hosts file) and verify the error path doesn't auto-retry.
 
 ### Phase G — Export + slicer launch (~½ day)
-- `export.stl` writes one or many STLs to a project subfolder.
+- `export.stl` writes one or many STLs to a project subfolder, named `<slug>_<ts>.stl` (multi-color: `<slug>_<ts>_red.stl` etc.).
 - `slicer.launch` runs Bambu Studio with file args. Path read from settings (set in wizard C.4).
 - **Acceptance:** export creates files; Bambu Studio opens with the STL(s) loaded.
 
 ### Phase H — Persistence (~½ day)
-- `<name>.vasepipe.json` schema in `lib/types.ts` mirrored by `sidecar/orchestrator.py`. Contains: `prompt`, `art_style`, `params`, `meshy_task_ids`, `edit_chain`, `artifact_paths`.
+- `<slug>.conjure3d.json` schema in `lib/types.ts` mirrored by `sidecar/orchestrator.py`. Contains: `name` (display), `slug`, `prompt`, `art_style`, `object_type`, `params`, `meshy_task_ids`, `edit_chain`, `artifact_paths`.
 - "Save" / "Open" in app menu. Loading restores Editor state and re-runs the edit chain to rebuild the preview GLB.
 - **Acceptance:** save a project, close app, reopen, load — same preview, same sanity status, same export output (byte-identical STL).
 
 ### Phase I — Polish + ship (~1.5 days)
 - App icon, splash screen, About dialog with version + build date.
 - Connection badge in status bar (green = Blender socket alive; click to reconnect).
-- Crash handler captures sidecar stderr and writes `%LOCALAPPDATA%\VasePipe\logs\<timestamp>.log`.
+- Crash handler captures sidecar stderr and writes `%LOCALAPPDATA%\Conjure3D\logs\<timestamp>.log`.
 - Settings screen accessible from app menu (re-run wizard, change paths, replace Meshy key).
 - README screenshots, GIFs of the wizard flow.
-- **Acceptance:** ship `VasePipe-Setup.exe` and a clean Win11 VM install-and-run smoke test for the bundled vase + guitar fixtures.
+- **Acceptance:** ship `Conjure3D-Setup.exe` and a clean Win11 VM install-and-run smoke test for the bundled fixtures.
 
 ## 5. Functional requirements per screen
 
 **0 — Wizard:** sequential 5 steps as described in Phase C. User can't skip; "Back" allowed within wizard. Each step shows green check on success, red X with retry button on failure. Persists state — closing the app mid-wizard resumes where you left off.
 
-**1 — New Project:** prompt textarea (multiline, 500-char cap), `art_style` dropdown (realistic / sculpture / low-poly / cartoon), parameter form: `target_height_mm` (10–250, but interpreted as *longest dim*), `object_type` dropdown (vase / solid_decorative / flat_part — affects auto-clean), `flat_bottom` (toggle, default on), `decimate_target_faces` (default 50000), `printer` (X1C only in v1). Hollow handled in slicer per pipeline doc — don't expose a Solidify control; do expose a "Hollow walls in slicer (vase mode)" hint that shows in Export. "Generate" button → screen 2.
+**1 — New Project:** project name input (free text, the slug derives from this), prompt textarea (multiline, 500-char cap), `art_style` dropdown (realistic / sculpture / low-poly / cartoon), parameter form: `target_height_mm` (10–250, but interpreted as *longest dim*), `object_type` dropdown (vase / solid_decorative / flat_part — affects auto-clean), `flat_bottom` (toggle, default on), `decimate_target_faces` (default 50000), `printer` (X1C only in v1). Hollow handled in slicer per pipeline doc — don't expose a Solidify control; do expose a "Hollow walls in slicer (vase mode)" hint that shows in Export. "Generate" button → screen 2.
 
 **2 — Generate:** progress bar (driven by Meshy `progress` field), elapsed time, Cancel button (DELETE on the Meshy task, then back to screen 1). On SUCCEEDED → screen 3.
 
@@ -214,7 +219,7 @@ Frontend collects key via password input. Sidecar saves with `keyring.set_passwo
   - All types: scale → voxel remesh @ 0.8 mm → keep largest → recenter → flat bottom @ 1mm → fix normals → decimate to target faces
   - `vase` only: open_top @ 2 mm → bridge top loops
   - `solid_decorative` / `flat_part`: skip top-open and bridge
-- Color split (radio): None | Zebra (count 2-16, axis Z default) | Quarter (X+Y planes through center). Show a warning under the radio: "Parametric splits work best on vase-shaped objects. For complex anatomies (guitar body / neck / headstock, chess pieces, etc.), select None and use Bambu Studio's brush paint instead."
+- Color split (radio): None | Zebra (count 2-16, axis Z default) | Quarter (X+Y planes through center). Show a warning under the radio: "Parametric splits work best on rotationally-symmetric objects (vases, lampshades). For complex anatomies (guitar body / neck / headstock, chess pieces, etc.), select None and use Bambu Studio's brush paint instead."
 
 "Apply" button at bottom; greyed out unless params changed; click → sidecar runs `edit.apply_chain` → frontend reloads `<project>/preview.glb`. Sanity panel under viewport: 4 lights (Manifold / Single component / Normals outward / Longest dim ≤ 256 mm). Red light = warning, blocks Export.
 
@@ -245,18 +250,20 @@ meshy.download_glb       ({ url, dst_path })                → { path, size }
 edit.apply_chain         ({ src_glb, edits, dst_dir })      → { preview_glb, stl_paths, sanity, dims_mm, errors? }
 edit.list_operations     ()                                 → { ops: [...] }   // for UI to render edit catalog
 
-export.stl               ({ project_dir, color_split })     → { stls: [...] }
+export.stl               ({ project_dir, slug, color_split })  → { stls: [...] }
 slicer.launch            ({ paths })                        → { ok, pid }
 
 project.save             ({ project, dst_path })            → { ok, path }
 project.load             ({ path })                         → { project }
+
+util.slugify             ({ name })                         → { slug }         // exposed for UI preview
 ```
 
 `edits` is an ordered list. Auto-clean order is fixed (scale must run before voxel remesh). Color split is the optional last step:
 
 ```jsonc
 [
-  { "type": "scale_to_longest","target_mm": 200 },
+  { "type": "scale_to_longest","target_mm": 80 },
   { "type": "voxel_remesh",   "voxel_mm": 0.8 },
   { "type": "keep_largest" },
   { "type": "recenter_xy" },
@@ -274,36 +281,37 @@ project.load             ({ path })                         → { project }
 
 Every edit is a pure function. Replaying the same chain on the same input GLB must produce a byte-identical STL (test this with both fixtures).
 
-## 7. Persistence schema (`<name>.vasepipe.json`)
+## 7. Persistence schema (`<slug>.conjure3d.json`)
 
 ```jsonc
 {
   "version": 1,
-  "name": "Stylized vase 01",
+  "name": "Lampshade idea",            // user-typed display name
+  "slug": "lampshade-idea",            // sanitized; drives filenames
   "created_at": "2026-04-30T13:29:30Z",
-  "prompt": "Stylized minimalist geometric vase, single watertight mesh...",
+  "prompt": "<full prompt text>",
   "art_style": "realistic",
-  "object_type": "vase",        // vase | solid_decorative | flat_part
+  "object_type": "vase",               // vase | solid_decorative | flat_part
   "meshy": {
     "preview_task_id": "019ddfde-...",
     "refine_task_id":  "019de194-..." | null
   },
   "params": {
-    "target_height_mm": 80,     // longest dim
+    "target_height_mm": 80,            // longest dim
     "flat_bottom": true,
     "decimate_target_faces": 50000,
     "printer": "X1C"
   },
   "edits": [ /* see above */ ],
   "artifacts": {
-    "src_glb":     "vase_20260430-132930.glb",
+    "src_glb":     "lampshade-idea_20260430-132930.glb",
     "preview_glb": "preview.glb",
-    "stl_paths":   ["vase_..._red.stl", "vase_..._yellow.stl"]
+    "stl_paths":   ["lampshade-idea_20260430-132930.stl"]
   }
 }
 ```
 
-Artifacts live in a sibling folder `<name>.vasepipe/`. Both the project file and that folder share a stem.
+Artifacts live in a sibling folder `<slug>.conjure3d/`. Both the project file and that folder share the slug stem.
 
 ## 8. Failure handling rules (from pipeline doc, must be enforced)
 
@@ -320,12 +328,13 @@ Artifacts live in a sibling folder `<name>.vasepipe/`. Both the project file and
 
 Run before tagging v1.0.0:
 
-- [ ] `cargo tauri build` produces `VasePipe-Setup.exe` < 75 MB
+- [ ] `cargo tauri build` produces `Conjure3D-Setup.exe` < 75 MB
 - [ ] Fresh Win11 VM (Blender NOT pre-installed): installer runs; wizard halts at step 1 with install link; after Blender install + re-check, wizard completes
 - [ ] Fresh Win11 VM (Blender pre-installed): wizard runs all 5 steps to green
 - [ ] `system.ping` returns pong after launch
 - [ ] `system.health.blender_socket` reflects current state (green when Blender + addon connected; red when not)
 - [ ] `pytest sidecar/tests/` all green
+- [ ] Slugify: round-trip "Mom's birthday 2026 ❤️" → `moms-birthday-2026` → matching files appear in Downloads
 - [ ] End-to-end with mock Meshy on **vase fixture**: prompt → preview → editor → export → STL file present, opens in Bambu Studio
 - [ ] End-to-end with mock Meshy on **guitar fixture**: same, with `object_type: solid_decorative` (open_top / bridge skipped)
 - [ ] End-to-end with real Meshy: same as above, with live API. Records task IDs in project file
@@ -344,13 +353,14 @@ Run before tagging v1.0.0:
 - **Auto-clean order — scale FIRST.** Voxel remesh on an unscaled 2 m Meshy output produces 2.7 million faces. Always: `scale_to_longest` → `voxel_remesh` → ... rest. This was a real bug in the prototype.
 - **Decimate is mandatory.** Even with proper scale order, voxel remesh produces 100k+ faces. `decimate target_faces=50000` keeps STLs sane.
 - **`open_top` + `bridge` are vase-only.** Gate on `object_type`. For guitars / chess pieces / busts they create holes that ruin the mesh.
+- **Slugify both sides (TS + Python) must produce identical output.** Test with the same input set in both `lib/slugify.ts` and `sidecar/slugify.py`. The Python is canonical (used for filenames); the TS exists for live UI preview.
 - **Don't run `bpy` in the Tauri Rust process.** Don't even bundle it. The sidecar is thin; Blender lives outside.
 - **JSON-RPC over stdio: terminate every message with `\n`.** Tauri's built-in sidecar IPC supports this directly.
 - **MCP socket has per-call timeout.** Long ops (heavy voxel remesh) hang the socket. Either pre-scale the mesh or chunk the ops. Auto-clean order solves this for the common case.
 - **Three.js loads GLB with `GLTFLoader`** — the GLB you write from Blender must include normals and use plain diffuse materials (no shader nodes) or it'll render gray.
 - **Boolean Intersect with EXACT solver** is the right move for quartering. Don't try bisect+fill on multi-component meshes — T-junctions and multi-face edges. Confirmed in the prototype.
 - **Volumes won't perfectly conserve across cuts** of dense voxel-remeshed meshes (`bm.calc_volume` precision). Tolerate ±1% in tests, log warnings beyond ±5%.
-- **Don't hardcode paths.** Use `%LOCALAPPDATA%\VasePipe\projects` as default project root; let users override.
+- **Don't hardcode paths.** Use `%LOCALAPPDATA%\Conjure3D\projects` as default project root; let users override.
 - **Tauri 2's NSIS bundler signs only with a real cert.** Ship unsigned for v1 with a clear README note.
 - **Don't mention "Solidify" in the UI.** It misbehaves on dense voxel topology. Hollowing is the slicer's job; the UI says so.
 - **Color split warning text must show in the Editor** when the user picks Zebra/Quarter on a non-vase shape. The text is in functional spec § Editor.
