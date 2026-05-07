@@ -1,0 +1,32 @@
+[package]
+name = "conjure3d"
+version = "0.0.1"
+description = "Conjure3D — text to 3D print"
+authors = []
+edition = "2021"
+
+[lib]
+name = "conjure3d_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
+
+# Patch tauri-winres v0.3.6: upstream escapes apostrophes in icon paths as `\'`,
+# which Microsoft's RC.EXE rejects (it does not recognize that escape sequence).
+# Affects any project whose absolute path contains an apostrophe, e.g. `Project's\`.
+# Local copy in vendor/tauri-winres has the escape removed (see src/helpers.rs).
+[patch.crates-io]
+tauri-winres = { path = "vendor/tauri-winres" }
