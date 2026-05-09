@@ -6,6 +6,7 @@ import json
 import sys
 
 from slugify import slugify as _slugify
+from settings import read_settings, write_settings
 
 COMMANDS = {}
 
@@ -25,6 +26,17 @@ def system_ping(params):
 @register("util.slugify")
 def util_slugify(params):
     return {"slug": _slugify(params["name"])}
+
+
+@register("settings.read")
+def settings_read(_params):
+    return read_settings()
+
+
+@register("settings.write")
+def settings_write(params):
+    write_settings(params["settings"])
+    return {"ok": True}
 
 
 def dispatch(req):
