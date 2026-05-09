@@ -14,6 +14,7 @@ from blender import detect_blender
 from addon import install_addon
 from connection import test_socket as _test_socket
 from bambu import detect_bambu as _detect_bambu
+import meshy_mock as _meshy
 
 _KEYRING_SERVICE = "conjure3d"
 _KEYRING_ACCOUNT = "meshy_api_key"
@@ -86,6 +87,26 @@ def system_has_meshy_key(_params):
 def system_open_url(params):
     webbrowser.open(params["url"])
     return {"ok": True}
+
+
+@register("meshy.generate_preview")
+def meshy_generate_preview(params):
+    return _meshy.generate_preview(params)
+
+
+@register("meshy.poll_task")
+def meshy_poll_task(params):
+    return _meshy.poll_task(params)
+
+
+@register("meshy.refine")
+def meshy_refine(params):
+    return _meshy.refine(params)
+
+
+@register("meshy.set_fixture")
+def meshy_set_fixture(params):
+    return _meshy.set_fixture(params)
 
 
 def dispatch(req):
