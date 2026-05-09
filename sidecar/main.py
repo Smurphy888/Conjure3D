@@ -10,6 +10,7 @@ from slugify import slugify as _slugify
 from settings import read_settings, write_settings
 from blender import detect_blender
 from addon import install_addon
+from connection import test_socket as _test_socket
 
 COMMANDS = {}
 
@@ -50,6 +51,11 @@ def wizard_detect_blender(_params):
 @register("wizard.install_addon")
 def wizard_install_addon(params):
     return install_addon(params["blender_version"])
+
+
+@register("wizard.test_socket")
+def wizard_test_socket(_params):
+    return _test_socket()
 
 
 @register("system.open_url")

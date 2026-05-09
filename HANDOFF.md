@@ -43,6 +43,7 @@ Update this as you go.
 - [x] Phase A — Hello, Tauri (skeleton, build to .exe)
 - [ ] Phase B — Sidecar plumbing (thin sidecar with MCP socket client)
 - [ ] Phase C — First-run wizard (Blender detect, addon install, connection test)
+  - **Note:** Step 2 UI (BlenderMCP addon install) is a stub button; backend `wizard.install_addon` is implemented and tested but the React step has no real progress feedback yet. Follow-up in Phase C cleanup.
 - [ ] Phase D — Local mock pipeline
 - [ ] Phase E — Real Blender ops via MCP
 - [ ] Phase F — Real Meshy
