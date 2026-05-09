@@ -1,4 +1,5 @@
 use std::io::{BufRead, BufReader, Write};
+use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Stdio};
 use std::sync::Mutex;
 
@@ -10,17 +11,30 @@ pub struct SidecarState {
 }
 
 impl SidecarState {
-    pub fn spawn() -> Result<Self, String> {
-        let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../sidecar/main.py");
-
-        // Use arg list, never a shell string, so the apostrophe in the path is safe.
-        let mut child = std::process::Command::new("python")
-            .arg(&script)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .map_err(|e| format!("Failed to spawn sidecar: {e}"))?;
+    /// Spawn the sidecar process.
+    /// `exe_path` = `None` in dev (uses `python sidecar/main.py`);
+    ///             = `Some(path/to/sidecar.exe)` in release builds.
+    pub fn spawn(exe_path: Option<PathBuf>) -> Result<Self, String> {
+        // Use arg list, never a shell string — apostrophe in the path is safe.
+        let mut child = match exe_path {
+            Some(exe) => std::process::Command::new(exe)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::inherit())
+                .spawn()
+                .map_err(|e| format!("Failed to spawn sidecar exe: {e}"))?,
+            None => {
+                let script =
+                    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../sidecar/main.py");
+                std::process::Command::new("python")
+                    .arg(&script)
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::inherit())
+                    .spawn()
+                    .map_err(|e| format!("Failed to spawn sidecar via python: {e}"))?
+            }
+        };
 
         let stdin = child.stdin.take().ok_or("No stdin handle on spawned process")?;
         let stdout = BufReader::new(child.stdout.take().ok_or("No stdout handle on spawned process")?);
@@ -69,7 +83,8 @@ mod tests {
 
     #[test]
     fn test_spawn_and_ping() {
-        let mut state = SidecarState::spawn().expect("failed to spawn sidecar");
+        // Dev path: python script (no exe needed)
+        let mut state = SidecarState::spawn(None).expect("failed to spawn sidecar");
         let result = state
             .call_inner("system.ping", serde_json::json!({}))
             .expect("system.ping failed");
@@ -79,9 +94,25 @@ mod tests {
 
     #[test]
     fn test_unknown_method_returns_error() {
-        let mut state = SidecarState::spawn().expect("failed to spawn sidecar");
+        let mut state = SidecarState::spawn(None).expect("failed to spawn sidecar");
         let result = state.call_inner("does.not.exist", serde_json::json!({}));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_spawn_exe_and_ping() {
+        let exe = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../sidecar/dist/sidecar.exe");
+        if !exe.exists() {
+            eprintln!("sidecar.exe not built — run scripts/build-sidecar.ps1 first; skipping");
+            return;
+        }
+        let mut state = SidecarState::spawn(Some(exe)).expect("failed to spawn sidecar.exe");
+        let result = state
+            .call_inner("system.ping", serde_json::json!({}))
+            .expect("system.ping via exe failed");
+        assert_eq!(result["ok"], true);
+        assert_eq!(result["msg"], "pong");
     }
 }
 

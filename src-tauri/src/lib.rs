@@ -7,7 +7,14 @@ mod sidecar;
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            let sc = sidecar::SidecarState::spawn().expect("Failed to spawn Python sidecar");
+            #[cfg(debug_assertions)]
+            let exe_path = None;
+
+            #[cfg(not(debug_assertions))]
+            let exe_path = Some(app.path().resource_dir()?.join("sidecar.exe"));
+
+            let sc = sidecar::SidecarState::spawn(exe_path)
+                .expect("Failed to spawn sidecar");
             app.manage(Mutex::new(sc));
             Ok(())
         })
