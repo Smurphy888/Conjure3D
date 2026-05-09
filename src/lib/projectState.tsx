@@ -1,12 +1,14 @@
 import { createContext, useContext, useReducer } from "react";
 import type { Dispatch, ReactNode } from "react";
+import type { Edit, Sanity } from "./types";
 
 export interface ProjectState {
     name: string;
     prompt: string;
     previewTaskId: string | null;
     selectedGlbPath: string | null;
-    edits: unknown[];
+    edits: Edit[];
+    lastSanity: Sanity | null;
 }
 
 export const INITIAL_STATE: ProjectState = {
@@ -15,6 +17,7 @@ export const INITIAL_STATE: ProjectState = {
     previewTaskId: null,
     selectedGlbPath: null,
     edits: [],
+    lastSanity: null,
 };
 
 export type ProjectAction =
@@ -22,7 +25,8 @@ export type ProjectAction =
     | { type: "SET_PROMPT"; prompt: string }
     | { type: "SET_PREVIEW_TASK"; previewTaskId: string }
     | { type: "SET_GLB_PATH"; selectedGlbPath: string }
-    | { type: "SET_EDITS"; edits: unknown[] }
+    | { type: "SET_EDITS"; edits: Edit[] }
+    | { type: "SET_SANITY"; lastSanity: Sanity }
     | { type: "RESET" };
 
 export function projectReducer(state: ProjectState, action: ProjectAction): ProjectState {
@@ -37,6 +41,8 @@ export function projectReducer(state: ProjectState, action: ProjectAction): Proj
             return { ...state, selectedGlbPath: action.selectedGlbPath };
         case "SET_EDITS":
             return { ...state, edits: action.edits };
+        case "SET_SANITY":
+            return { ...state, lastSanity: action.lastSanity };
         case "RESET":
             return { ...INITIAL_STATE };
         default:

@@ -15,6 +15,7 @@ from addon import install_addon
 from connection import test_socket as _test_socket
 from bambu import detect_bambu as _detect_bambu
 import meshy_mock as _meshy
+import orchestrator_mock as _orchestrator
 
 _KEYRING_SERVICE = "conjure3d"
 _KEYRING_ACCOUNT = "meshy_api_key"
@@ -107,6 +108,11 @@ def meshy_refine(params):
 @register("meshy.set_fixture")
 def meshy_set_fixture(params):
     return _meshy.set_fixture(params)
+
+
+@register("edit.apply_chain")
+def edit_apply_chain(params):
+    return _orchestrator.apply_chain(params)
 
 
 def dispatch(req):

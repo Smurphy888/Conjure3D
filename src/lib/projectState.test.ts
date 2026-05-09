@@ -23,9 +23,15 @@ describe("projectReducer", () => {
     });
 
     it("SET_EDITS updates edits array", () => {
-        const edits = [{ op: "scale", value: 2 }];
+        const edits = [{ type: "scale_to_longest", target_mm: 80 }];
         const s = projectReducer(INITIAL_STATE, { type: "SET_EDITS", edits });
         expect(s.edits).toEqual(edits);
+    });
+
+    it("SET_SANITY updates lastSanity", () => {
+        const sanity = { manifold: true, single_component: true, normals_outward: true, longest_dim_under_limit: true, dims_mm: [80, 60, 60] as [number, number, number] };
+        const s = projectReducer(INITIAL_STATE, { type: "SET_SANITY", lastSanity: sanity });
+        expect(s.lastSanity).toEqual(sanity);
     });
 
     it("RESET returns initial state", () => {
