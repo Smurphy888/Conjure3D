@@ -4,9 +4,11 @@ All diagnostic output goes to stderr; stdout is the protocol channel only.
 """
 import json
 import sys
+import webbrowser
 
 from slugify import slugify as _slugify
 from settings import read_settings, write_settings
+from blender import detect_blender
 
 COMMANDS = {}
 
@@ -36,6 +38,17 @@ def settings_read(_params):
 @register("settings.write")
 def settings_write(params):
     write_settings(params["settings"])
+    return {"ok": True}
+
+
+@register("wizard.detect_blender")
+def wizard_detect_blender(_params):
+    return detect_blender()
+
+
+@register("system.open_url")
+def system_open_url(params):
+    webbrowser.open(params["url"])
     return {"ok": True}
 
 
