@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useProjectState } from "../lib/projectState";
+import { ThreePreview } from "../components/ThreePreview";
 
 export function PreviewPick() {
     const navigate = useNavigate();
@@ -9,9 +10,10 @@ export function PreviewPick() {
         <div className="container">
             <h2>Pick a Preview</h2>
             {selectedGlbPath ? (
-                <p>
-                    Model ready: <code style={{ wordBreak: "break-all" }}>{selectedGlbPath}</code>
-                </p>
+                <>
+                    <ThreePreview src={selectedGlbPath} height={400} />
+                    <p style={{ fontSize: "0.8rem", color: "#888" }}>{selectedGlbPath}</p>
+                </>
             ) : (
                 <p style={{ color: "orange" }}>No model loaded yet.</p>
             )}
