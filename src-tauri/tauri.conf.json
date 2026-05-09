@@ -34,7 +34,8 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "resources/sidecar.exe": "sidecar.exe"
+      "resources/sidecar.exe": "sidecar.exe",
+      "resources/blender_mcp_addon.zip": "blender_mcp_addon.zip"
     }
   }
 }

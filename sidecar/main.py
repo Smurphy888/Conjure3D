@@ -9,6 +9,7 @@ import webbrowser
 from slugify import slugify as _slugify
 from settings import read_settings, write_settings
 from blender import detect_blender
+from addon import install_addon
 
 COMMANDS = {}
 
@@ -44,6 +45,11 @@ def settings_write(params):
 @register("wizard.detect_blender")
 def wizard_detect_blender(_params):
     return detect_blender()
+
+
+@register("wizard.install_addon")
+def wizard_install_addon(params):
+    return install_addon(params["blender_version"])
 
 
 @register("system.open_url")

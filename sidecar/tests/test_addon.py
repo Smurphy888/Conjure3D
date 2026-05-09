@@ -1,0 +1,128 @@
+import sys
+import zipfile
+from pathlib import Path
+from unittest.mock import patch
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from addon import _major_minor, install_addon
+
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+def _make_zip(tmp_path: Path, filenames: list[str]) -> Path:
+    """Create a test zip containing empty files with the given names."""
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    z = tmp_path / "test_addon.zip"
+    with zipfile.ZipFile(z, "w") as zf:
+        for name in filenames:
+            zf.writestr(name, b"# addon placeholder")
+    return z
+
+
+# ── _major_minor ─────────────────────────────────────────────────────────────
+
+def test_major_minor_full():
+    assert _major_minor("4.2.3") == "4.2"
+
+
+def test_major_minor_short():
+    assert _major_minor("4.3") == "4.3"
+
+
+def test_major_minor_too_short():
+    import pytest
+    with pytest.raises(ValueError):
+        _major_minor("4")
+
+
+# ── install_addon ─────────────────────────────────────────────────────────────
+
+def test_install_extracts_addon_file(tmp_path):
+    zip_path = _make_zip(tmp_path / "zip", ["blender_mcp.py"])
+    addons_root = tmp_path / "addons_root"
+
+    r = install_addon("4.2.3", zip_path=zip_path, addons_root=addons_root)
+
+    assert r["ok"] is True
+    installed = addons_root / "4.2" / "scripts" / "addons" / "blender_mcp.py"
+    assert installed.exists()
+
+
+def test_install_version_truncated_to_major_minor(tmp_path):
+    zip_path = _make_zip(tmp_path / "zip", ["blender_mcp.py"])
+    addons_root = tmp_path / "addons_root"
+
+    install_addon("4.3.2", zip_path=zip_path, addons_root=addons_root)
+
+    assert (addons_root / "4.3" / "scripts" / "addons" / "blender_mcp.py").exists()
+
+
+def test_install_creates_parent_dirs(tmp_path):
+    zip_path = _make_zip(tmp_path / "zip", ["blender_mcp.py"])
+    addons_root = tmp_path / "deep" / "nonexistent" / "root"
+
+    r = install_addon("4.2", zip_path=zip_path, addons_root=addons_root)
+
+    assert r["ok"] is True
+
+
+def test_install_is_idempotent(tmp_path):
+    zip_path = _make_zip(tmp_path / "zip", ["blender_mcp.py"])
+    addons_root = tmp_path / "addons_root"
+
+    r1 = install_addon("4.2", zip_path=zip_path, addons_root=addons_root)
+    r2 = install_addon("4.2", zip_path=zip_path, addons_root=addons_root)
+
+    assert r1["ok"] is True
+    assert r2["ok"] is True
+
+
+def test_install_missing_zip_returns_error(tmp_path):
+    r = install_addon("4.2", zip_path=tmp_path / "no_such.zip", addons_root=tmp_path)
+    assert r["ok"] is False
+    assert "not found" in r["error"]
+
+
+def test_install_invalid_version_returns_error(tmp_path):
+    r = install_addon("4", zip_path=tmp_path / "x.zip", addons_root=tmp_path)
+    assert r["ok"] is False
+    assert "major.minor" in r["error"]
+
+
+def test_install_returns_path_string(tmp_path):
+    zip_path = _make_zip(tmp_path / "zip", ["blender_mcp.py"])
+    addons_root = tmp_path / "root"
+
+    r = install_addon("4.2", zip_path=zip_path, addons_root=addons_root)
+
+    assert isinstance(r["path"], str)
+    assert "addons" in r["path"]
+
+
+def test_dispatch_wizard_install_addon(tmp_path):
+    """Integration: dispatch wizard.install_addon via the JSON-RPC dispatcher."""
+    import json, io
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    import main
+
+    zip_path = _make_zip(tmp_path / "zip", ["blender_mcp.py"])
+    addons_root = tmp_path / "root"
+
+    # Patch install_addon to use tmp dirs instead of APPDATA
+    original = main.COMMANDS["wizard.install_addon"]
+    try:
+        main.COMMANDS["wizard.install_addon"] = lambda p: install_addon(
+            p["blender_version"], zip_path=zip_path, addons_root=addons_root
+        )
+        req = json.dumps({
+            "jsonrpc": "2.0", "id": 1,
+            "method": "wizard.install_addon",
+            "params": {"blender_version": "4.2.3"},
+        })
+        out = io.StringIO()
+        main.run_loop(io.StringIO(req + "\n"), out)
+        resp = json.loads(out.getvalue())
+        assert resp["result"]["ok"] is True
+    finally:
+        main.COMMANDS["wizard.install_addon"] = original
