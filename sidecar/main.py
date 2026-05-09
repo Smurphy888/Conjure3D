@@ -5,6 +5,8 @@ All diagnostic output goes to stderr; stdout is the protocol channel only.
 import json
 import sys
 
+from slugify import slugify as _slugify
+
 COMMANDS = {}
 
 
@@ -18,6 +20,11 @@ def register(name):
 @register("system.ping")
 def system_ping(params):
     return {"ok": True, "msg": "pong"}
+
+
+@register("util.slugify")
+def util_slugify(params):
+    return {"slug": _slugify(params["name"])}
 
 
 def dispatch(req):
