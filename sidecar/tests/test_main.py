@@ -2,6 +2,7 @@ import io
 import json
 import sys
 import os
+from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -63,3 +64,55 @@ def test_run_loop_parse_error():
     stdout.seek(0)
     resp = json.loads(stdout.readline())
     assert resp["error"]["code"] == -32700
+
+
+# ── meshy key commands ─────────────────────────────────────────────────────────
+
+def test_set_meshy_key_returns_ok():
+    with patch("main.keyring.set_password") as mock_set:
+        req = {"jsonrpc": "2.0", "id": 10, "method": "system.set_meshy_key", "params": {"key": "test_key_value"}}
+        resp = dispatch(req)
+    assert resp["result"]["ok"] is True
+    mock_set.assert_called_once_with("conjure3d", "meshy_api_key", "test_key_value")
+
+
+def test_set_meshy_key_does_not_echo_key():
+    """Key must never appear in the response."""
+    with patch("main.keyring.set_password"):
+        req = {"jsonrpc": "2.0", "id": 11, "method": "system.set_meshy_key", "params": {"key": "secret_abc123"}}
+        resp = dispatch(req)
+    resp_str = json.dumps(resp)
+    assert "secret_abc123" not in resp_str
+
+
+def test_has_meshy_key_true_when_set():
+    with patch("main.keyring.get_password", return_value="somekey"):
+        req = {"jsonrpc": "2.0", "id": 12, "method": "system.has_meshy_key", "params": {}}
+        resp = dispatch(req)
+    assert resp["result"]["set"] is True
+
+
+def test_has_meshy_key_false_when_not_set():
+    with patch("main.keyring.get_password", return_value=None):
+        req = {"jsonrpc": "2.0", "id": 13, "method": "system.has_meshy_key", "params": {}}
+        resp = dispatch(req)
+    assert resp["result"]["set"] is False
+
+
+def test_has_meshy_key_false_when_empty_string():
+    with patch("main.keyring.get_password", return_value=""):
+        req = {"jsonrpc": "2.0", "id": 14, "method": "system.has_meshy_key", "params": {}}
+        resp = dispatch(req)
+    assert resp["result"]["set"] is False
+
+
+def test_set_meshy_key_run_loop_integration():
+    with patch("main.keyring.set_password"):
+        stdin = io.StringIO(
+            json.dumps({"jsonrpc": "2.0", "id": 15, "method": "system.set_meshy_key", "params": {"key": "k"}}) + "\n"
+        )
+        stdout = io.StringIO()
+        run_loop(stdin=stdin, stdout=stdout)
+        stdout.seek(0)
+        resp = json.loads(stdout.readline())
+    assert resp["result"]["ok"] is True

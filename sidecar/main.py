@@ -6,11 +6,17 @@ import json
 import sys
 import webbrowser
 
+import keyring
+
 from slugify import slugify as _slugify
 from settings import read_settings, write_settings
 from blender import detect_blender
 from addon import install_addon
 from connection import test_socket as _test_socket
+from bambu import detect_bambu as _detect_bambu
+
+_KEYRING_SERVICE = "conjure3d"
+_KEYRING_ACCOUNT = "meshy_api_key"
 
 COMMANDS = {}
 
@@ -56,6 +62,24 @@ def wizard_install_addon(params):
 @register("wizard.test_socket")
 def wizard_test_socket(_params):
     return _test_socket()
+
+
+@register("wizard.detect_bambu")
+def wizard_detect_bambu(_params):
+    return _detect_bambu()
+
+
+@register("system.set_meshy_key")
+def system_set_meshy_key(params):
+    key = params["key"]
+    keyring.set_password(_KEYRING_SERVICE, _KEYRING_ACCOUNT, key)
+    return {"ok": True}
+
+
+@register("system.has_meshy_key")
+def system_has_meshy_key(_params):
+    val = keyring.get_password(_KEYRING_SERVICE, _KEYRING_ACCOUNT)
+    return {"set": val is not None and val != ""}
 
 
 @register("system.open_url")

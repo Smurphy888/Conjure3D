@@ -32,10 +32,11 @@ export function Wizard({ initialSettings, onDone }: Props) {
         return firstIncomplete === -1 ? 0 : firstIncomplete;
     });
 
-    async function markComplete() {
+    async function markComplete(updates?: Partial<Omit<Settings, "version" | "wizard">>) {
         const key = STEP_KEYS[step];
         const updated: Settings = {
             ...settings,
+            ...updates,
             wizard: { ...settings.wizard, [key]: true },
         };
         setSettings(updated);

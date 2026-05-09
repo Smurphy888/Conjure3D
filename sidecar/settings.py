@@ -14,6 +14,7 @@ DEFAULT_SETTINGS: dict = {
         "step_bambu": False,
         "step_meshy": False,
     },
+    "bambu_path": None,
 }
 
 

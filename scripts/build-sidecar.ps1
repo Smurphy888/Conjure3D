@@ -13,13 +13,13 @@ Write-Host "Building sidecar.exe with PyInstaller..."
 
 Push-Location $sidecarDir
 try {
-    # When keyring usage lands, add: --hidden-import=keyring.backends.Windows
     python -m PyInstaller `
         --onefile `
         --name sidecar `
         --distpath dist `
         --workpath build `
         --specpath build `
+        --hidden-import=keyring.backends.Windows `
         --noconfirm `
         main.py
 } finally {

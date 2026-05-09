@@ -11,6 +11,7 @@ export interface WizardState {
 export interface Settings {
     version: 1;
     wizard: WizardState;
+    bambu_path: string | null;
 }
 
 const DEFAULT_WIZARD: WizardState = {
@@ -24,6 +25,7 @@ const DEFAULT_WIZARD: WizardState = {
 export const DEFAULT_SETTINGS: Settings = {
     version: 1,
     wizard: { ...DEFAULT_WIZARD },
+    bambu_path: null,
 };
 
 export function wizardComplete(s: Settings): boolean {
