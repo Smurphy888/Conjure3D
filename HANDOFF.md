@@ -40,16 +40,21 @@ Conjure3D expects Blender to be **running and connected** every session. The Edi
 
 Update this as you go.
 
-- [x] Phase A — Hello, Tauri (skeleton, build to .exe)
-- [ ] Phase B — Sidecar plumbing (thin sidecar with MCP socket client)
-- [ ] Phase C — First-run wizard (Blender detect, addon install, connection test)
-  - **Note:** Step 2 UI (BlenderMCP addon install) is a stub button; backend `wizard.install_addon` is implemented and tested but the React step has no real progress feedback yet. Follow-up in Phase C cleanup.
-- [ ] Phase D — Local mock pipeline
-- [ ] Phase E — Real Blender ops via MCP
-- [ ] Phase F — Real Meshy
-- [ ] Phase G — Export + slicer launch
-- [ ] Phase H — Persistence
-- [ ] Phase I — Polish + ship
+- [x] Phase A — Hello, Tauri (skeleton, build to .exe) → `1034c76`
+- [x] Phase B — Sidecar plumbing (Issues #2–#5: JSON-RPC echo, Tauri↔sidecar, PyInstaller bundle, slugify Py+TS twins)
+- [x] Phase C — First-run wizard (Issues #6–#11: scaffolding, detect_blender, addon bundle, test_socket, detect_bambu+meshy key, five-screen routing)
+  - **Follow-up:** Step 2 UI (BlenderMCP addon install) is a stub button; backend `wizard.install_addon` is implemented and tested but the React step lacks real progress feedback. Address in Phase I polish.
+- [x] Phase D — Local mock pipeline (Issues #12–#14: mock Meshy, ThreePreview GLB component with drei Bounds + OrbitControls, mock edit.apply_chain + Editor wiring)
+- [ ] Phase E — Real Blender ops via MCP (Issues #15–#22)
+  - **Status:** queued; gated on user keeping Blender 4.2+ open with BlenderMCP "Connect to Claude" clicked (port 9876 must be LISTENING during fires). Wrapper currently set to `--model opus` for this phase.
+- [ ] Phase F — Real Meshy (Issue #23) — agent writes code + mock tests; live API acceptance is user-driven
+- [ ] Phase G — Export + slicer launch (Issues #24–#25)
+- [ ] Phase H — Persistence (Issue #26)
+- [ ] Phase I — Polish + ship (Issues #27–#30)
+
+### Side commits (not part of issue numbering)
+
+- `b5d86b4` — chore: add `protocol-asset` Tauri feature. Needed by ThreePreview to load GLB bytes via Tauri's resource protocol; surfaced during Phase D Issue #13. Not a numbered issue but kept on the main branch since it's required for the feature to function.
 
 ## Where to start (cold pickup)
 
