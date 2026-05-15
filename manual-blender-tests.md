@@ -29,3 +29,28 @@ Acceptance:
 - `keep_largest` collapses a multi-component input down to a single component
 
 Status: PENDING USER VERIFICATION
+
+---
+
+## Issue #17 — scale_to_longest + recenter_xy + flat_bottom
+
+Command: `pytest sidecar/tests/test_ops_normalize.py -k live`
+
+Live tests:
+- `test_live_scale_to_longest_hits_target_within_tolerance`
+- `test_live_recenter_xy_centers_bbox_and_grounds_base`
+- `test_live_flat_bottom_full_pipeline_leaves_base_on_z0`
+
+Acceptance:
+- After `scale_to_longest(80)` on `sample_vase.glb`: longest dim = 80 mm ± 0.1 mm
+- After `recenter_xy`: bbox centered at X=0, Y=0 and base min-Z = 0, all
+  within ± 0.001 mm
+- After full Phase-6 prefix (scale → voxel → keep_largest → recenter →
+  flat_bottom) on the vase: base min-Z = 0 ± 0.001 mm and mesh not collapsed
+
+Known risk if a measurement assertion fails: `obj.bound_box` can read stale
+immediately after EDIT-mode ops / transform_apply on some Blender 4.x builds.
+Fix is to insert `bpy.context.view_layer.update()` before each `bound_box`
+read in `ops/normalize.py` (recenter_xy and flat_bottom).
+
+Status: PENDING USER VERIFICATION
