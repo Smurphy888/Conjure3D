@@ -108,3 +108,31 @@ Acceptance:
   without contacting Blender (mesh unchanged)
 
 Status: PENDING USER VERIFICATION
+
+---
+
+## Issue #21 — color_split (zebra + quarter)
+
+Command: `pytest sidecar/tests/test_ops_color_split.py -k live`
+
+Live tests:
+- `test_live_zebra_8_yields_two_meshes_volume_preserved`
+- `test_live_quarter_yields_eight_meshes_volume_preserved`
+
+Acceptance:
+- `zebra` count=8 on the prepped vase: exactly 2 output meshes, total
+  abs-volume within 1% of input
+- `quarter` on the prepped vase: 8 output meshes (4 wedges x 2 colors),
+  total abs-volume within 1% of input
+- (ISSUES.md #21 acceptance 3 — Editor warning when object_type != vase —
+  is ALREADY satisfied by src/lib/edits.ts `shouldWarnColorSplit`, 17
+  passing vitest cases; this op is backend-only.)
+
+QUARTER SPEC NOTE: implemented as 4 angular wedges x 2 alternating colors =
+8 outputs (pipeline.md "4 wedge sets per color" + ISSUES.md "8 outputs").
+If the user intended a different count, reconcile here — cheap to change.
+
+Manifold-per-output is asserted indirectly (volume preservation within 1%);
+add explicit per-mesh manifold checks during live verification if desired.
+
+Status: PENDING USER VERIFICATION
