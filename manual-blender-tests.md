@@ -54,3 +54,20 @@ Fix is to insert `bpy.context.view_layer.update()` before each `bound_box`
 read in `ops/normalize.py` (recenter_xy and flat_bottom).
 
 Status: PENDING USER VERIFICATION
+
+---
+
+## Issue #18 — fix_normals (signed-volume check + flip)
+
+Command: `pytest sidecar/tests/test_ops_fix_normals.py -k live`
+
+Live tests:
+- `test_live_fix_normals_makes_volume_positive_for_vase`
+- `test_live_fix_normals_repairs_inside_out_cube`
+
+Acceptance:
+- After `fix_normals` on `sample_vase.glb`: signed volume > 0
+- An explicitly inverted cube: `volume_before` < 0, `flipped` is True,
+  `volume_after` > 0 (signed volume positive after this op for any input)
+
+Status: PENDING USER VERIFICATION
