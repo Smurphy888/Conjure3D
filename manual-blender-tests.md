@@ -90,3 +90,21 @@ Acceptance:
   unchanged
 
 Status: PENDING USER VERIFICATION
+
+---
+
+## Issue #20 — open_top + bridge_top_loops (vase-only)
+
+Command: `pytest sidecar/tests/test_ops_vase_top.py -k live`
+
+Live tests:
+- `test_live_open_top_then_bridge_yields_watertight_vase`
+- `test_live_solid_decorative_skips_both_ops_unchanged`
+
+Acceptance:
+- `object_type == "vase"`: after `open_top` boundary_edges > 0 (mouth open),
+  then `bridge_top_loops` returns watertight (boundary_edges == 0)
+- `object_type == "solid_decorative"`: both ops return `skipped: True`
+  without contacting Blender (mesh unchanged)
+
+Status: PENDING USER VERIFICATION
