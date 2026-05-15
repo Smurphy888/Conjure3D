@@ -71,3 +71,22 @@ Acceptance:
   `volume_after` > 0 (signed volume positive after this op for any input)
 
 Status: PENDING USER VERIFICATION
+
+---
+
+## Issue #19 — decimate (COLLAPSE modifier to target face count)
+
+Command: `pytest sidecar/tests/test_ops_decimate.py -k live`
+
+Live tests:
+- `test_live_decimate_voxel_remeshed_vase_hits_target`
+- `test_live_decimate_skips_small_mesh`
+
+Acceptance:
+- Full Phase-6 prefix on the vase (scale → voxel → keep_largest →
+  decimate(50000)): `faces_after` <= 50000, `faces_after` < `faces_before`,
+  and the applied `ratio` < 0.1 (voxel-remeshed inputs overproduce)
+- A mesh already under target (default cube): `ratio` == 1.0, face count
+  unchanged
+
+Status: PENDING USER VERIFICATION
