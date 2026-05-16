@@ -4,6 +4,7 @@ All diagnostic output goes to stderr; stdout is the protocol channel only.
 """
 import json
 import sys
+import traceback
 import webbrowser
 
 import keyring
@@ -161,7 +162,16 @@ def dispatch(req):
     try:
         result = COMMANDS[method](params)
     except Exception as exc:
-        print(f"[sidecar] internal error in {method}: {exc}", file=sys.stderr)
+        # Full traceback to stderr. The Tauri host pipes the sidecar's stderr
+        # to %LOCALAPPDATA%\Conjure3D\logs\<timestamp>.log (Issue #29), so a
+        # crash always leaves a stack trace on disk for the Copy-diagnostic
+        # button. The JSON-RPC error stays one-line (data=str(exc)).
+        print(
+            f"[sidecar] internal error in {method}: {exc}\n"
+            f"{traceback.format_exc()}",
+            file=sys.stderr,
+            flush=True,
+        )
         if req_id is None:
             return None
         return {

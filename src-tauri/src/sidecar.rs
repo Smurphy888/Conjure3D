@@ -1,13 +1,34 @@
+use std::env;
+use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Stdio};
 use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct SidecarState {
     stdin: ChildStdin,
     stdout: BufReader<std::process::ChildStdout>,
     next_id: u64,
+    log_path: PathBuf,
     _child: Child,
+}
+
+/// `%LOCALAPPDATA%\Conjure3D\logs\<unix-secs>.log` — one file per sidecar
+/// process. Falls back to the OS temp dir if LOCALAPPDATA is unset (dev /
+/// non-Windows) rather than panicking. Directory creation failure is
+/// non-fatal: the path is still returned and the OS surfaces the open error.
+fn session_log_path() -> PathBuf {
+    let base = env::var("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| env::temp_dir());
+    let dir = base.join("Conjure3D").join("logs");
+    let _ = fs::create_dir_all(&dir);
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    dir.join(format!("sidecar-{secs}.log"))
 }
 
 impl SidecarState {
@@ -15,12 +36,27 @@ impl SidecarState {
     /// `exe_path` = `None` in dev (uses `python sidecar/main.py`);
     ///             = `Some(path/to/sidecar.exe)` in release builds.
     pub fn spawn(exe_path: Option<PathBuf>) -> Result<Self, String> {
+        // One log file per sidecar process; the child writes its stderr here
+        // (create + append) and the Copy-diagnostic command re-opens the path
+        // read-only. try_clone() gives the two match arms independent write
+        // handles to the same file without consuming `log_file`.
+        let log_path = session_log_path();
+        let log_file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+            .map_err(|e| format!("Failed to open sidecar log {log_path:?}: {e}"))?;
+
         // Use arg list, never a shell string — apostrophe in the path is safe.
         let mut child = match exe_path {
             Some(exe) => std::process::Command::new(exe)
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
-                .stderr(Stdio::inherit())
+                .stderr(Stdio::from(
+                    log_file
+                        .try_clone()
+                        .map_err(|e| format!("log handle clone: {e}"))?,
+                ))
                 .spawn()
                 .map_err(|e| format!("Failed to spawn sidecar exe: {e}"))?,
             None => {
@@ -30,7 +66,11 @@ impl SidecarState {
                     .arg(&script)
                     .stdin(Stdio::piped())
                     .stdout(Stdio::piped())
-                    .stderr(Stdio::inherit())
+                    .stderr(Stdio::from(
+                        log_file
+                            .try_clone()
+                            .map_err(|e| format!("log handle clone: {e}"))?,
+                    ))
                     .spawn()
                     .map_err(|e| format!("Failed to spawn sidecar via python: {e}"))?
             }
@@ -43,8 +83,14 @@ impl SidecarState {
             stdin,
             stdout,
             next_id: 1,
+            log_path,
             _child: child,
         })
+    }
+
+    /// Absolute path of this session's sidecar log file.
+    pub fn log_path(&self) -> &Path {
+        &self.log_path
     }
 
     pub(crate) fn call_inner(&mut self, method: &str, params: serde_json::Value) -> Result<serde_json::Value, String> {
@@ -126,4 +172,32 @@ pub fn invoke_sidecar(
         .lock()
         .map_err(|e| format!("Sidecar lock poisoned: {e}"))?
         .call_inner(&method, params)
+}
+
+/// Issue #29: return this session's log path and the tail of its contents
+/// (capped) so the frontend can build a "Copy diagnostic" payload. The file
+/// is re-opened read-only (Windows allows reading while the child appends);
+/// a missing/unreadable file yields empty contents, never an error, so the
+/// diagnostic button still works (it just has no log lines yet). The
+/// last-N-lines trim lives in TypeScript (src/lib/diagnostic.ts) where it is
+/// unit-tested.
+#[tauri::command]
+pub fn read_diagnostic_log(
+    state: tauri::State<'_, Mutex<SidecarState>>,
+) -> Result<serde_json::Value, String> {
+    let path = state
+        .lock()
+        .map_err(|e| format!("Sidecar lock poisoned: {e}"))?
+        .log_path()
+        .to_path_buf();
+
+    const CAP: usize = 64 * 1024;
+    let bytes = fs::read(&path).unwrap_or_default();
+    let start = bytes.len().saturating_sub(CAP);
+    let contents = String::from_utf8_lossy(&bytes[start..]).into_owned();
+
+    Ok(serde_json::json!({
+        "path": path.to_string_lossy(),
+        "contents": contents,
+    }))
 }

@@ -348,3 +348,35 @@ Acceptance:
   production bundle.)
 
 Status: PENDING USER VERIFICATION
+
+---
+
+## Phase I Issue #29 — Crash handler + structured logging (E2E)
+
+Automated proof committed: `sidecar/tests/test_crash_logging.py` (a raising
+handler writes a full Python `Traceback` to stderr) and
+`src/lib/diagnostic.test.ts` (tailLines + buildDiagnostic assemble the
+last-200-lines + project-state payload). The Rust stderr->file piping and
+the on-disk `%LOCALAPPDATA%\Conjure3D\logs\sidecar-<secs>.log` + clipboard
+hand-off need a real Tauri build/run (same precedent as #27/#28/Phase E/G).
+
+Steps (`pnpm tauri dev` or installed build):
+1. Launch the app; note a new file appears at
+   `%LOCALAPPDATA%\Conjure3D\logs\sidecar-<unix-secs>.log`.
+2. Force a sidecar crash: open devtools console and run
+   `await window.__TAURI__.core.invoke('invoke_sidecar', { method: 'edit.apply_chain', params: { bad: true } })`
+   (any handler that raises works; this one raises on missing params).
+3. Open the log file.
+4. Home screen → "About" → "Copy diagnostic"; paste into a text editor.
+
+Acceptance:
+- The log file contains `Traceback (most recent call last):` and the
+  raised exception type/message (the `[sidecar] internal error in ...`
+  line precedes it).
+- Pasted diagnostic contains: app version + build date header, the
+  `Log file:` path, the `--- Project state ---` JSON, and the
+  `--- Last N log line(s) ---` tail including the traceback lines.
+- Clipboard copy succeeds (or shows a clear "Could not copy diagnostic"
+  message if the webview denies clipboard access).
+
+Status: PENDING USER VERIFICATION

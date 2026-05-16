@@ -33,7 +33,10 @@ pub fn run() {
                 app.emit("run-wizard", ()).ok();
             }
         })
-        .invoke_handler(tauri::generate_handler![sidecar::invoke_sidecar])
+        .invoke_handler(tauri::generate_handler![
+            sidecar::invoke_sidecar,
+            sidecar::read_diagnostic_log
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
