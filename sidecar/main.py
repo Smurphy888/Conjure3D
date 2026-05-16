@@ -17,6 +17,7 @@ from bambu import detect_bambu as _detect_bambu
 import meshy_mock as _meshy
 import orchestrator as _orchestrator  # real ops chain (Phase E #22)
 import slicer as _slicer  # Bambu Studio hand-off (Phase G #25)
+import project as _project  # .conjure3d.json save/load (Phase H #26)
 
 _KEYRING_SERVICE = "conjure3d"
 _KEYRING_ACCOUNT = "meshy_api_key"
@@ -119,6 +120,16 @@ def edit_apply_chain(params):
 @register("slicer.launch")
 def slicer_launch(params):
     return _slicer.launch(params)
+
+
+@register("project.save")
+def project_save(params):
+    return _project.save(params)
+
+
+@register("project.load")
+def project_load(params):
+    return _project.load(params)
 
 
 def dispatch(req):

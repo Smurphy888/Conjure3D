@@ -17,6 +17,22 @@ response it can render.
 """
 import os
 
+# ── Persisted-project schema mirror (Phase H Issue #26) ──────────────────────
+# The canonical schema lives in src/lib/types.ts (`ConjureProject`). The
+# Python side mirrors only the version + the fields it must VALIDATE on load;
+# it deliberately does not reproduce the whole TS interface. project.py
+# imports these; kept here per ISSUES.md #26 ("mirrored by orchestrator.py").
+PROJECT_SCHEMA_VERSION = 1
+REQUIRED_PROJECT_FIELDS = (
+    "version",
+    "name",
+    "prompt",
+    "preview_task_id",
+    "source_glb",
+    "edits",
+    "color_split_mode",
+)
+
 from ops import (
     import_glb,
     export_glb,

@@ -190,6 +190,44 @@ Acceptance:
 
 Status: PENDING USER VERIFICATION
 
+## Phase H Issue #26 — `<slug>.conjure3d.json` save/load
+
+Backend + schema committed on mocked acceptance. `sidecar/project.py`
+`save`/`load` (RPCs `project.save`/`project.load`); schema version +
+required fields mirrored in `orchestrator.py`
+(`PROJECT_SCHEMA_VERSION = 1`, `REQUIRED_PROJECT_FIELDS`); canonical TS
+schema `ConjureProject` in `src/lib/types.ts`; pure
+`serializeProject`/`deserializeProject` in `src/lib/project.ts`. Tests:
+sidecar 11/11 (`tests/test_project.py`), vitest 10/10
+(`src/lib/project.test.ts`); full sidecar 193 passed/18 skipped, vitest
+47 passed, `tsc --noEmit` clean.
+
+BYTE-IDENTICAL DESIGN (verify the intent holds, do not "fix" it): the
+byte-identical guarantee comes from `save` *copying* preview.glb + STLs
+into the sibling `<slug>.conjure3d/` folder — those copies are the
+record. `load` restores Editor state from JSON and points at the copies.
+Re-running `edit.apply_chain` is a separate editability affordance, NOT
+the byte-identical mechanism (Blender export is not bit-deterministic).
+
+ISSUES.md #26 acceptance is UI/live. Verify with the app running:
+
+1. Save → close app → reopen → Open project file: the restored Editor
+   state matches (name, prompt, edits, color-split mode) and the
+   preview GLB + STLs in the sibling folder are byte-identical to
+   pre-close (compare with `Get-FileHash`).
+2. Version guard: hand-edit a saved `.conjure3d.json` to `version: 2`,
+   Open it → frontend shows the `SCHEMA_VERSION_MISMATCH` message, does
+   not crash, does not load partial state.
+3. Moved-artifacts warning: move the sibling folder, Open → load still
+   succeeds with an `ARTIFACT_MISSING` warning surfaced (non-fatal).
+
+Frontend Editor Save/Open buttons + Tauri file-dialog wiring is
+DEFERRED (UI surface area, separate review pass). The pure serializer +
+sidecar IO + RPC contract this acceptance depends on are complete and
+tested; only the Editor button wiring + dialog plumbing remains.
+
+Status: PENDING USER VERIFICATION
+
 ## Phase G Issue #25 — `slicer.launch` for Bambu Studio
 
 Backend committed on mocked acceptance: `sidecar/slicer.py` reads
