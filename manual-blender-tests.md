@@ -136,3 +136,37 @@ Manifold-per-output is asserted indirectly (volume preservation within 1%);
 add explicit per-mesh manifold checks during live verification if desired.
 
 Status: PENDING USER VERIFICATION
+
+## Issue #22 — Wire real `edit.apply_chain` end-to-end (Phase E capstone)
+
+Backend wiring is committed on mocked acceptance: `orchestrator.apply_chain`
+replaces `orchestrator_mock`, dispatches the real ops in canonical auto-clean
+order (scale → voxel → keep_largest → recenter → flat_bottom → fix_normals →
+decimate → vase open_top/bridge → color_split), measures real sanity via
+`ops/sanity.py`, and writes `<dst_dir>/preview.glb` via `ops/export_glb.py`.
+9/9 mocked orchestrator tests pass (`tests/test_orchestrator.py`); full
+sidecar suite 150 passed, 15 skipped (live-gated).
+
+ISSUES.md #22 acceptance is inherently live-only and is the Phase E closing
+gate. Verify with Blender 4.2+ open and BlenderMCP connected:
+
+1. Frontend end-to-end, sample_vase.glb:
+   Command: pnpm tauri dev → New Project → load sidecar/tests/fixtures/sample_vase.glb
+            → Editor → apply a vase chain (scale_to_longest 180, voxel_remesh,
+            keep_largest, recenter_xy, flat_bottom, fix_normals, decimate 50000,
+            open_top, bridge_top_loops)
+   Acceptance: preview.glb written to the project dir and renders in the
+   Editor; sanity panel shows manifold=true, single_component=true,
+   normals_outward=true, longest_dim_under_limit=true; errors=[].
+
+2. Frontend end-to-end, sample_guitar.glb (solid_decorative, no vase ops):
+   Command: same flow, load sidecar/tests/fixtures/sample_guitar.glb, apply
+            scale_to_longest 240 + voxel_remesh + keep_largest + recenter_xy
+            + flat_bottom + fix_normals + decimate 50000
+   Acceptance: real preview.glb renders; sanity all-true; errors=[].
+
+3. Round-trip timing:
+   Command: time one apply_chain run on a ~50k-poly mesh (post-decimate)
+   Acceptance: apply round-trip < 8 s on a typical dev machine.
+
+Status: PENDING USER VERIFICATION

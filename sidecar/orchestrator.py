@@ -1,0 +1,143 @@
+"""
+Real orchestrator for edit.apply_chain (Phase E Issue #22). Replaces
+orchestrator_mock. Imports the source GLB into Blender, runs the edit chain
+in the canonical auto-clean order, measures sanity, and writes
+<dst_dir>/preview.glb for the frontend.
+
+Auto-clean order (pipeline.md / HANDOFF.md, SCALE FIRST):
+  scale -> voxel -> keep_largest -> recenter -> flat_bottom -> fix_normals
+  -> decimate -> (vase: open_top + bridge_top_loops) -> color_split
+
+The chain is sorted into this order before execution, so a mis-ordered
+incoming chain still runs safely (voxel can never precede scale).
+
+Every Blender failure is captured into result["errors"] — apply_chain never
+raises across the JSON-RPC boundary, so the Editor always gets a structured
+response it can render.
+"""
+import os
+
+from ops import (
+    import_glb,
+    export_glb,
+    sanity as sanity_op,
+    normalize,
+    voxel_remesh,
+    keep_largest,
+    fix_normals,
+    decimate,
+    vase_top,
+    color_split,
+)
+
+# Lower rank runs first. Unknown types sort last (and are reported).
+CANONICAL_ORDER = {
+    "scale_to_longest": 1,
+    "voxel_remesh": 2,
+    "keep_largest": 3,
+    "recenter_xy": 4,
+    "flat_bottom": 5,
+    "fix_normals": 6,
+    "decimate": 7,
+    "open_top": 8,
+    "bridge_top_loops": 9,
+    "color_split": 10,
+}
+
+_FAILED_SANITY = {
+    "manifold": False,
+    "single_component": False,
+    "normals_outward": False,
+    "longest_dim_under_limit": False,
+    "dims_mm": [0.0, 0.0, 0.0],
+}
+
+
+def _run_edit(edit: dict, object_type: str):
+    t = edit.get("type")
+    if t == "scale_to_longest":
+        return normalize.scale_to_longest(float(edit["target_mm"]))
+    if t == "voxel_remesh":
+        return voxel_remesh.run(float(edit.get("voxel_mm", 0.8)))
+    if t == "keep_largest":
+        return keep_largest.run()
+    if t == "recenter_xy":
+        return normalize.recenter_xy()
+    if t == "flat_bottom":
+        return normalize.flat_bottom(float(edit.get("cut_mm", 0.8)))
+    if t == "fix_normals":
+        return fix_normals.run()
+    if t == "decimate":
+        return decimate.run(int(edit["target_faces"]))
+    if t == "open_top":
+        return vase_top.open_top(object_type, float(edit.get("cut_mm", 2.0)))
+    if t == "bridge_top_loops":
+        return vase_top.bridge_top_loops(object_type)
+    if t == "color_split":
+        return color_split.run(edit["mode"], int(edit.get("count", 8)))
+    raise KeyError(f"unknown edit type: {t!r}")
+
+
+def apply_chain(params: dict) -> dict:
+    """
+    params: {"src_glb": str, "edits": [Edit], "dst_dir": str}
+    returns {"preview_glb", "sanity", "stl_paths", "errors"}.
+    """
+    src_glb = params["src_glb"]
+    edits = params.get("edits") or []
+    dst_dir = params.get("dst_dir") or os.path.dirname(src_glb)
+    preview_glb = os.path.join(dst_dir, "preview.glb")
+
+    object_type = (
+        "vase"
+        if any(e.get("type") == "open_top" for e in edits)
+        else "solid_decorative"
+    )
+    color_split_in_chain = any(e.get("type") == "color_split" for e in edits)
+
+    errors: list[str] = []
+
+    try:
+        import_glb.run(src_glb)
+    except Exception as exc:  # never cross JSON-RPC with a raise
+        return {
+            "preview_glb": preview_glb,
+            "sanity": dict(_FAILED_SANITY),
+            "stl_paths": [],
+            "errors": [f"import failed: {exc}"],
+        }
+
+    ordered = sorted(edits, key=lambda e: CANONICAL_ORDER.get(e.get("type"), 99))
+    for edit in ordered:
+        try:
+            _run_edit(edit, object_type)
+        except Exception as exc:
+            errors.append(f"{edit.get('type')}: {exc}")
+
+    try:
+        s = sanity_op.run()
+        sanity = {
+            "manifold": s["boundary_edges"] == 0 and s["non_manifold_edges"] == 0,
+            # color_split intentionally produces multiple components.
+            "single_component": s["components"] == 1 or color_split_in_chain,
+            "normals_outward": s["signed_volume"] > 0,
+            "longest_dim_under_limit": (
+                max(s["dims_mm"]) <= sanity_op.LONGEST_DIM_LIMIT_MM
+            ),
+            "dims_mm": s["dims_mm"],
+        }
+    except Exception as exc:
+        errors.append(f"sanity: {exc}")
+        sanity = dict(_FAILED_SANITY)
+
+    try:
+        export_glb.run(preview_glb)
+    except Exception as exc:
+        errors.append(f"export: {exc}")
+
+    return {
+        "preview_glb": preview_glb,
+        "sanity": sanity,
+        "stl_paths": [],
+        "errors": errors,
+    }

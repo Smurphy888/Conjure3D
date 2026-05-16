@@ -15,7 +15,7 @@ from addon import install_addon
 from connection import test_socket as _test_socket
 from bambu import detect_bambu as _detect_bambu
 import meshy_mock as _meshy
-import orchestrator_mock as _orchestrator
+import orchestrator as _orchestrator  # real ops chain (Phase E #22)
 
 _KEYRING_SERVICE = "conjure3d"
 _KEYRING_ACCOUNT = "meshy_api_key"
