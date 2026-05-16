@@ -170,3 +170,22 @@ gate. Verify with Blender 4.2+ open and BlenderMCP connected:
    Acceptance: apply round-trip < 8 s on a typical dev machine.
 
 Status: PENDING USER VERIFICATION
+
+## Phase F Issue #23 — real Meshy API (live acceptance)
+
+Command/flow:
+1. Edit sidecar/main.py: change `import meshy_mock as _meshy` -> `import meshy as _meshy`
+2. Meshy API key is already in Windows Credential Manager (service conjure3d).
+3. `pnpm tauri dev` -> New Project -> enter a prompt -> Generate
+4. Confirm a real GLB downloads and renders in the editor preview.
+5. Network-kill check: block assets.meshy.ai in hosts, retry -> error shown
+   verbatim, NO auto-retry (credits not double-spent).
+6. Revert main.py import back to meshy_mock if you want subsequent autonomous
+   fires to stay mock-only (recommended until release).
+
+Acceptance:
+- Real prompt -> real Meshy task id -> real GLB on disk, size > 0, glTF magic
+- Error path surfaces Meshy's message verbatim, no silent retry
+- Task ids recorded in the project's .conjure3d.json
+
+Status: PENDING USER VERIFICATION
