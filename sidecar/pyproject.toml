@@ -6,3 +6,9 @@ dependencies = [
     "requests",
     "keyring",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "responses",
+]
