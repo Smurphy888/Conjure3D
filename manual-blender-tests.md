@@ -189,3 +189,32 @@ Acceptance:
 - Task ids recorded in the project's .conjure3d.json
 
 Status: PENDING USER VERIFICATION
+
+## Phase G Issue #24 — `export_stl` per-color binary STLs
+
+Committed on mocked acceptance (Blender does not stay up between unattended
+fires; same precedent as Phase E). `ops/export_stl.py` writes one binary STL
+per mesh object via Blender 4.2+ `bpy.ops.wm.stl_export`
+(`ascii_format=False`, `global_scale=1000.0`, `export_selected_objects=True`,
+`forward_axis='Y'`, `up_axis='Z'`). Mocked suite pins every exporter kwarg so
+a wrong param name trips immediately; live run below is the only thing that
+exercises the real Blender exporter.
+
+Command: `pytest sidecar/tests/test_ops_export_stl.py -k live`
+
+Live tests:
+- `test_live_none_writes_one_binary_stl`
+- `test_live_zebra_writes_two_binary_stls`
+- `test_live_quarter_writes_eight_binary_stls`
+
+Acceptance:
+- none mode on the prepped vase → exactly 1 file `vase_<ts>.stl`
+- zebra (count=8) → exactly 2 files `..._red.stl`, `..._yellow.stl`
+- quarter → exactly 8 files `..._red-q0.stl` … `..._yellow-q3.stl`
+- Every file: size > 0 and first 5 bytes ≠ `solid` (binary, not ASCII)
+- ORIENTATION (visual, not asserted): open one STL in Bambu Studio and
+  confirm it is upright and mm-scaled, not rotated. `forward_axis='Y'`/
+  `up_axis='Z'` are pinned to the legacy convention; if a 4.2.x point
+  release loads it sideways, adjust those two kwargs and re-verify here.
+
+Status: PENDING USER VERIFICATION
