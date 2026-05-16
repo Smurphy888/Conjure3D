@@ -320,3 +320,31 @@ Acceptance:
   edit chain. While green, Apply works normally.
 
 Status: PENDING USER VERIFICATION
+
+---
+
+## Phase I Issue #28 — App icon (visual verification)
+
+The custom purple Conjure3D icon set (`src-tauri/icons/*`, generated from
+`scripts/gen-icon.py` -> `app-icon.png`) is wired in `src-tauri/tauri.conf.json`
+(`bundle.icon` lists 32/128/128@2x/icns/ico). The About dialog half of this
+issue (version + build date) is fully automated-tested and committed; the
+icon-visibility bullet is inherently build-time + visual and cannot be
+truthfully ticked by an unattended fire (same precedent as Issue #27 /
+Phase E/G live deferrals).
+
+Steps:
+1. `pnpm tauri build` (produces the NSIS installer under
+   `src-tauri/target/release/bundle/nsis/`).
+2. Run the installer.
+
+Acceptance:
+- Installer window/setup shows the purple Conjure3D icon (not the default
+  Tauri logo).
+- After install, the taskbar entry shows the custom icon while the app runs.
+- Alt-Tab thumbnail/icon shows the custom icon.
+- (About dialog version + build date already verified automatically:
+  vitest about.test.ts 7/7, Vite `define` injection confirmed in the
+  production bundle.)
+
+Status: PENDING USER VERIFICATION

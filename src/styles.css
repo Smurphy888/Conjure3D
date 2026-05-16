@@ -75,3 +75,14 @@ h1 {
   max-width: 420px;
   width: 90%;
 }
+
+/* Phase I Issue #28 — About link on the Home screen */
+.link-button {
+  background: none;
+  border: none;
+  color: #a855f7;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}

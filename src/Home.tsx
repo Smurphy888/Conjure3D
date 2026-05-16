@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { invokeSidecar } from "./lib/ipc";
+import { AboutDialog } from "./components/AboutDialog";
+import { appVersion } from "./lib/about";
 
 export function Home() {
     const [sidecarStatus, setSidecarStatus] = useState("loading...");
@@ -14,9 +16,12 @@ export function Home() {
 
     return (
         <div className="container">
-            <h1>Conjure3D v0.0.1</h1>
+            <h1>Conjure3D v{appVersion()}</h1>
             <p>{sidecarStatus}</p>
             <button onClick={() => navigate("/new-project")}>New Project</button>
+            <div style={{ marginTop: "1.25rem" }}>
+                <AboutDialog />
+            </div>
         </div>
     );
 }
