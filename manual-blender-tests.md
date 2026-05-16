@@ -290,3 +290,33 @@ Acceptance:
   release loads it sideways, adjust those two kwargs and re-verify here.
 
 Status: PENDING USER VERIFICATION
+
+---
+
+## Phase I Issue #27 — Connection badge + Reconnect dialog
+
+Pure connection core (`src/lib/blenderConnection.ts`) + React glue
+(`src/lib/connectionContext.tsx`, `src/components/ConnectionBadge.tsx`,
+App/Editor wiring) committed mocked-only (Blender :9876 unattended-absent
+across scheduled fires; same precedent as Phase E/G). The pure core is fully
+unit-tested (13 vitest cases: probe normalisation, never-throws, classify,
+strict editChainGate, polling immediate/no-overlap/unmount-race/stop). The
+three acceptance bullets require a real Blender + BlenderMCP session and are
+the only thing not exercised by the mocked suite.
+
+Steps (run with `pnpm tauri dev`):
+1. Start Blender 4.2+, open the BlenderMCP N-panel, click "Connect to Claude"
+   (port 9876 listening). Launch the app; reach any screen.
+2. Confirm the bottom-right badge goes green ("Blender: connected") within 5s.
+3. Quit Blender (or click Disconnect in the addon).
+4. Open the Editor screen with a generated GLB selected.
+
+Acceptance:
+- Badge turns red ("Blender: disconnected") within 5s of quitting Blender.
+- Reopen Blender, click "Connect to Claude", press Reconnect in the badge
+  modal (or wait one 5s poll) -> badge goes green within 5s.
+- While red, the Editor "Apply" button is disabled and shows the amber
+  "Blender is not connected..." message; clicking Apply never runs the
+  edit chain. While green, Apply works normally.
+
+Status: PENDING USER VERIFICATION

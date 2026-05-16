@@ -3,6 +3,8 @@ import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
 import { type Settings, DEFAULT_SETTINGS, readSettings, wizardComplete } from "./lib/settings";
 import { ProjectProvider } from "./lib/projectState";
+import { ConnectionProvider } from "./lib/connectionContext";
+import { ConnectionBadge } from "./components/ConnectionBadge";
 import { Wizard } from "./Wizard";
 import { Home } from "./Home";
 import { NewProject } from "./screens/NewProject";
@@ -69,9 +71,12 @@ function App() {
 
     return (
         <HashRouter>
-            <ProjectProvider>
-                <AppRoutes settings={effective} onWizardDone={handleWizardDone} />
-            </ProjectProvider>
+            <ConnectionProvider>
+                <ProjectProvider>
+                    <AppRoutes settings={effective} onWizardDone={handleWizardDone} />
+                    <ConnectionBadge />
+                </ProjectProvider>
+            </ConnectionProvider>
         </HashRouter>
     );
 }

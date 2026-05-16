@@ -4,6 +4,8 @@ import { useProjectState, useProjectDispatch } from "../lib/projectState";
 import { ThreePreview } from "../components/ThreePreview";
 import { SanityPanel } from "../components/SanityPanel";
 import { invokeSidecar } from "../lib/ipc";
+import { useConnection } from "../lib/connectionContext";
+import { editChainGate } from "../lib/blenderConnection";
 import { buildEdits, shouldWarnColorSplit, DEFAULT_PARAMS, type EditorParams, type ObjectType, type ColorSplitMode } from "../lib/edits";
 import type { EditChainResult } from "../lib/types";
 
@@ -11,6 +13,8 @@ export function Editor() {
     const navigate = useNavigate();
     const { selectedGlbPath, lastSanity } = useProjectState();
     const dispatch = useProjectDispatch();
+    const { state: connState } = useConnection();
+    const gate = editChainGate(connState);
 
     const [params, setParams] = useState<EditorParams>({ ...DEFAULT_PARAMS });
     const [applying, setApplying] = useState(false);
@@ -26,6 +30,10 @@ export function Editor() {
 
     async function handleApply() {
         if (!currentGlbPath) return;
+        if (!gate.allowed) {
+            setError(gate.message);
+            return;
+        }
         setApplying(true);
         setError(null);
         try {
@@ -144,9 +152,18 @@ export function Editor() {
                         )}
                     </div>
 
-                    <button onClick={handleApply} disabled={applying || !currentGlbPath} style={{ width: "100%" }}>
+                    <button
+                        onClick={handleApply}
+                        disabled={applying || !currentGlbPath || !gate.allowed}
+                        style={{ width: "100%" }}
+                    >
                         {applying ? "Applying…" : "Apply"}
                     </button>
+                    {!gate.allowed && gate.message && (
+                        <p style={{ color: "#f5a623", fontSize: "0.8rem", marginTop: "0.4rem" }}>
+                            {gate.message}
+                        </p>
+                    )}
                     {error && <p style={{ color: "red", fontSize: "0.8rem", marginTop: "0.4rem" }}>{error}</p>}
                 </div>
 

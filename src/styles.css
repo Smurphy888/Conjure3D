@@ -27,3 +27,51 @@ h1 {
   font-weight: 700;
   color: #a855f7;
 }
+
+/* Phase I Issue #27 — connection badge + reconnect dialog */
+.conn-badge {
+  position: fixed;
+  bottom: 12px;
+  right: 12px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.78rem;
+  border: 1px solid #333;
+  border-radius: 999px;
+  background: #1a1a1a;
+  color: #ddd;
+  cursor: pointer;
+}
+.conn-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #888;
+}
+.conn-checking .conn-dot { background: #f5a623; }
+.conn-connected .conn-dot { background: #2ecc71; }
+.conn-disconnected .conn-dot { background: #ff4d4f; }
+.conn-connected { color: #2ecc71; }
+.conn-disconnected { color: #ff4d4f; }
+.conn-checking { color: #f5a623; }
+
+.conn-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1001;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.conn-modal {
+  background: #161616;
+  border: 1px solid #333;
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  max-width: 420px;
+  width: 90%;
+}
