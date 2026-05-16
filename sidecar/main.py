@@ -16,6 +16,7 @@ from connection import test_socket as _test_socket
 from bambu import detect_bambu as _detect_bambu
 import meshy_mock as _meshy
 import orchestrator as _orchestrator  # real ops chain (Phase E #22)
+import slicer as _slicer  # Bambu Studio hand-off (Phase G #25)
 
 _KEYRING_SERVICE = "conjure3d"
 _KEYRING_ACCOUNT = "meshy_api_key"
@@ -113,6 +114,11 @@ def meshy_set_fixture(params):
 @register("edit.apply_chain")
 def edit_apply_chain(params):
     return _orchestrator.apply_chain(params)
+
+
+@register("slicer.launch")
+def slicer_launch(params):
+    return _slicer.launch(params)
 
 
 def dispatch(req):

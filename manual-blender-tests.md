@@ -190,6 +190,40 @@ Acceptance:
 
 Status: PENDING USER VERIFICATION
 
+## Phase G Issue #25 — `slicer.launch` for Bambu Studio
+
+Backend committed on mocked acceptance: `sidecar/slicer.py` reads
+`bambu_path` from settings only (strict per ISSUES.md #25 — no auto-detect
+fallback here), validates the exe + every STL exists, then spawns Bambu
+detached (`DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`) with an argv list.
+RPC `slicer.launch` registered in `main.py`. 9/9 mocked tests pass
+(`tests/test_slicer.py`); full sidecar suite 182 passed, 18 skipped.
+
+ISSUES.md #25 acceptance is inherently live + UI. Verify with the app
+running:
+
+1. Happy path — `pnpm tauri dev` → run a project through Editor → Export.
+   With `bambu_path` set in Settings and STLs written by Issue #24's
+   `export_stl`, hitting Export opens Bambu Studio with all STL files
+   loaded. Close/restart the app afterward and confirm Bambu stays open
+   (detached spawn).
+2. Missing-path path — clear `bambu_path` in `%LOCALAPPDATA%\Conjure3D\
+   settings.json` (or via Settings UI), hit Export. Expect the
+   `BAMBU_PATH_MISSING` error code → frontend opens the Settings dialog →
+   user browses to `bambu-studio.exe` → retry Export → Bambu opens.
+
+Error-code contract the frontend must branch on (frozen, pinned in tests):
+`BAMBU_PATH_MISSING`, `BAMBU_PATH_INVALID`, `NO_STL_FILES`,
+`STL_FILES_MISSING`.
+
+Frontend Export-screen wiring is DEFERRED — `src/screens/Export.tsx` is
+still a stub and depends on `stl_paths` plumbing that does not exist yet
+(`orchestrator.apply_chain` still returns `stl_paths: []`; see the #24/#25
+decision punt below). Wiring Export.tsx + the Settings-browse-retry loop is
+the remaining work for this acceptance to go green.
+
+Status: PENDING USER VERIFICATION
+
 ## Phase G Issue #24 — `export_stl` per-color binary STLs
 
 Committed on mocked acceptance (Blender does not stay up between unattended
