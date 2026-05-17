@@ -65,9 +65,31 @@ export function Generate() {
     return (
         <div className="container">
             <h2>Generate</h2>
-            <p>Generating your 3D model via Meshy…</p>
-            {taskId && <p>Task: {taskId}</p>}
-            <p>Progress: {progress}%</p>
+            <p>{taskId ? "Generating your 3D model via Meshy…" : "Starting generation…"}</p>
+            <div
+                style={{
+                    width: "min(420px, 80vw)",
+                    height: 14,
+                    border: "1px solid #444",
+                    borderRadius: 999,
+                    overflow: "hidden",
+                    background: "#1a1a1a",
+                    margin: "0.75rem 0",
+                }}
+            >
+                <div
+                    style={{
+                        width: `${Math.max(4, progress)}%`,
+                        height: "100%",
+                        background: "#a855f7",
+                        transition: "width 0.4s ease",
+                    }}
+                />
+            </div>
+            <p style={{ fontSize: "0.9rem" }}>{progress}%</p>
+            {taskId && (
+                <p style={{ fontSize: "0.75rem", color: "#888" }}>Task: {taskId}</p>
+            )}
             <button onClick={() => navigate("/new-project")}>Cancel</button>
         </div>
     );

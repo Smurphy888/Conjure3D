@@ -2,10 +2,18 @@
 Mock Meshy commands for dev and testing.
 No network calls — returns fixture GLB paths from sidecar/tests/fixtures/.
 """
+import sys
 import uuid
 from pathlib import Path
 
-_FIXTURE_DIR = Path(__file__).parent / "tests" / "fixtures"
+# When frozen by PyInstaller (the installed sidecar.exe), __file__ points into
+# a temp extraction dir and the source tree's tests/fixtures/ does NOT exist.
+# PyInstaller unpacks --add-data payloads under sys._MEIPASS, so resolve the
+# fixture dir there when frozen, and from the source tree in dev.
+if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+    _FIXTURE_DIR = Path(sys._MEIPASS) / "tests" / "fixtures"
+else:
+    _FIXTURE_DIR = Path(__file__).parent / "tests" / "fixtures"
 _fixture: str = "vase"
 _poll_counts: dict[str, int] = {}
 

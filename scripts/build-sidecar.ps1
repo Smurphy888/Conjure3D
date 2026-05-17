@@ -19,6 +19,13 @@ Write-Host "Building sidecar.exe with PyInstaller..."
 Push-Location $sidecarDir
 try {
     # 2>&1 merges stderr into the stream so PS does not treat INFO logs as errors.
+    # --add-data bundles the sample GLB fixtures so meshy_mock works in the
+    # installed exe (Phase F deferred -> mock is the default; without this the
+    # mock returns paths to fixtures that don't exist inside the onefile bundle
+    # and the preview screen errors). Windows PyInstaller uses SRC;DEST.
+    # SRC must be ABSOLUTE: with --specpath build, PyInstaller resolves a
+    # relative --add-data source against the specpath (build/), not cwd.
+    $fixturesSrc = Join-Path $sidecarDir "tests\fixtures"
     python -m PyInstaller `
         --onefile `
         --name sidecar `
@@ -26,6 +33,7 @@ try {
         --workpath build `
         --specpath build `
         --hidden-import=keyring.backends.Windows `
+        --add-data "$fixturesSrc;tests/fixtures" `
         --noconfirm `
         main.py 2>&1 | Write-Host
     $pyrc = $LASTEXITCODE
