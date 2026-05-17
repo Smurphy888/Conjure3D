@@ -33,14 +33,38 @@ export function Wizard({ initialSettings, onDone }: Props) {
     });
 
     async function markComplete(updates?: Partial<Omit<Settings, "version" | "wizard">>) {
+        // Defensive: a step wired as onClick={onComplete} passes a React
+        // SyntheticEvent here. Spreading it would inject DOM nodes / circular
+        // refs into the settings object, making writeSettings' JSON-serialize
+        // throw — the await then rejects and the wizard silently never
+        // advances. Only accept a plain settings-shaped object.
+        const safeUpdates =
+            updates &&
+            typeof updates === "object" &&
+            !("nativeEvent" in updates) &&
+            !("_reactName" in updates)
+                ? updates
+                : undefined;
+
         const key = STEP_KEYS[step];
         const updated: Settings = {
             ...settings,
-            ...updates,
+            ...safeUpdates,
             wizard: { ...settings.wizard, [key]: true },
         };
-        setSettings(updated);
-        await writeSettings(updated);
+        try {
+            setSettings(updated);
+            await writeSettings(updated);
+        } catch (e) {
+            // Surface instead of silently freezing on Step N.
+            // eslint-disable-next-line no-console
+            console.error("markComplete: writeSettings failed", e);
+            window.alert(
+                `Could not save setup progress: ${String(e)}\n\n` +
+                    "Your Blender/Meshy detection still worked; this is a settings-write error."
+            );
+            return;
+        }
         if (step < STEP_COUNT - 1) {
             setStep(step + 1);
         } else {

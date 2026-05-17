@@ -59,7 +59,7 @@ export function Step1Blender({ onComplete }: Props) {
                     <button onClick={openDownload}>Download Blender LTS</button>
                 )}
                 {versionOk && (
-                    <button onClick={onComplete}>Continue</button>
+                    <button onClick={() => onComplete()}>Continue</button>
                 )}
             </div>
         </div>

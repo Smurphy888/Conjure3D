@@ -66,7 +66,7 @@ export function Step5Meshy({ onComplete }: Props) {
             {error && <p style={{ color: "red" }}>{error}</p>}
             <div style={{ marginTop: "0.5rem" }}>
                 {canContinue && (
-                    <button onClick={onComplete}>Continue</button>
+                    <button onClick={() => onComplete()}>Continue</button>
                 )}
             </div>
         </div>
