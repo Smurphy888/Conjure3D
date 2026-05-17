@@ -3,7 +3,12 @@
 # Output: src-tauri\resources\sidecar.exe
 
 Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
+# NOTE: do NOT set $ErrorActionPreference = "Stop" globally. PyInstaller writes
+# its INFO progress log to stderr; under Windows PowerShell that surfaces as a
+# NativeCommandError and "Stop" would abort the build mid-run (the .exe then
+# bundled by `cargo tauri build` is stale -> "Method not found" at runtime).
+# We detect real failure via $LASTEXITCODE instead.
+$ErrorActionPreference = "Continue"
 
 $repoRoot = Split-Path $PSScriptRoot -Parent
 $sidecarDir = Join-Path $repoRoot "sidecar"
@@ -13,6 +18,7 @@ Write-Host "Building sidecar.exe with PyInstaller..."
 
 Push-Location $sidecarDir
 try {
+    # 2>&1 merges stderr into the stream so PS does not treat INFO logs as errors.
     python -m PyInstaller `
         --onefile `
         --name sidecar `
@@ -21,9 +27,15 @@ try {
         --specpath build `
         --hidden-import=keyring.backends.Windows `
         --noconfirm `
-        main.py
+        main.py 2>&1 | Write-Host
+    $pyrc = $LASTEXITCODE
 } finally {
     Pop-Location
+}
+
+if ($pyrc -ne 0) {
+    Write-Error "PyInstaller failed with exit code $pyrc"
+    exit 1
 }
 
 $exePath = Join-Path $sidecarDir "dist\sidecar.exe"
