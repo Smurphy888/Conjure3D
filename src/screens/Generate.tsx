@@ -7,10 +7,11 @@ type PollResult = {
     status: "PROCESSING" | "SUCCEEDED" | "FAILED";
     progress: number;
     model_urls?: { glb: string };
+    task_error?: string;
 };
 
 export function Generate() {
-    const { prompt } = useProjectState();
+    const { prompt, name } = useProjectState();
     const dispatch = useProjectDispatch();
     const navigate = useNavigate();
     const [taskId, setTaskId] = useState<string | null>(null);
@@ -34,12 +35,26 @@ export function Generate() {
                     if (cancelled) break;
                     setProgress(r.progress);
                     if (r.status === "SUCCEEDED" && r.model_urls) {
-                        dispatch({ type: "SET_GLB_PATH", selectedGlbPath: r.model_urls.glb });
+                        let glb = r.model_urls.glb;
+                        // Real Meshy returns a signed S3 URL the webview can't
+                        // render and that expires (~24h). Fetch it to a local
+                        // project dir and use that path. Mock returns a local
+                        // path already (no http) — passes through unchanged.
+                        if (/^https?:/i.test(glb)) {
+                            const dl = await invokeSidecar<{ path: string }>(
+                                "meshy.download_glb",
+                                { url: glb, name }
+                            );
+                            if (cancelled) return;
+                            glb = dl.path;
+                        }
+                        dispatch({ type: "SET_GLB_PATH", selectedGlbPath: glb });
                         navigate("/preview-pick");
                         return;
                     }
                     if (r.status === "FAILED") {
-                        setError("Meshy generation failed.");
+                        // Surface Meshy's verbatim message; never auto-retry.
+                        setError(r.task_error ? `Meshy: ${r.task_error}` : "Meshy generation failed.");
                         return;
                     }
                 }

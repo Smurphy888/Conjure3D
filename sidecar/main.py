@@ -15,7 +15,7 @@ from blender import detect_blender
 from addon import install_addon
 from connection import test_socket as _test_socket
 from bambu import detect_bambu as _detect_bambu
-import meshy_mock as _meshy
+import meshy as _meshy  # REAL Meshy API (Phase F accepted by user 2026-05-18; spends credits)
 import orchestrator as _orchestrator  # real ops chain (Phase E #22)
 import slicer as _slicer  # Bambu Studio hand-off (Phase G #25)
 import project as _project  # .conjure3d.json save/load (Phase H #26)
@@ -110,7 +110,28 @@ def meshy_refine(params):
 
 @register("meshy.set_fixture")
 def meshy_set_fixture(params):
-    return _meshy.set_fixture(params)
+    # Mock-only (dev fixture toggle). Real meshy.py has no set_fixture; guard
+    # so a stray call can't AttributeError now that real Meshy is wired.
+    fn = getattr(_meshy, "set_fixture", None)
+    if fn is None:
+        return {"ok": False, "error": "set_fixture unavailable (real Meshy active)"}
+    return fn(params)
+
+
+@register("meshy.download_glb")
+def meshy_download_glb(params):
+    # Real Meshy returns a signed S3 URL that expires (~24h) and that the
+    # webview cannot render directly. Fetch once to a real, writable project
+    # dir derived from the project name (frontend never builds Windows paths).
+    import os
+    from pathlib import Path
+    from slugify import slugify
+
+    slug = slugify(params.get("name") or "model")
+    base = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Conjure3D" / "projects" / slug
+    base.mkdir(parents=True, exist_ok=True)
+    dest = str(base / f"{slug}.glb")
+    return _meshy.download_glb({"url": params["url"], "dest": dest})
 
 
 @register("edit.apply_chain")

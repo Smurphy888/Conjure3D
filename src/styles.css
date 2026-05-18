@@ -20,6 +20,28 @@ body {
   justify-content: center;
   min-height: 100vh;
   text-align: center;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 2rem 1rem;
+}
+
+/* Centering fix: #root spanned shrink-to-fit so screens hugged the left.
+   Make the app fill the viewport and give content blocks a centered,
+   sensible max width with full-width form controls. */
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+.container > div {
+  width: min(640px, 100%);
+}
+
+.container input,
+.container textarea,
+.container select {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 h1 {
