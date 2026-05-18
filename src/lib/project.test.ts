@@ -13,6 +13,9 @@ const state: ProjectState = {
         { type: "color_split", mode: "zebra" },
     ],
     lastSanity: null,
+    objectType: "vase",
+    colorSplitMode: "zebra",
+    editApplied: true,
 };
 
 describe("serializeProject", () => {

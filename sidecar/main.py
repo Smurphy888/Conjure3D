@@ -139,6 +139,37 @@ def edit_apply_chain(params):
     return _orchestrator.apply_chain(params)
 
 
+@register("export.stl")
+def export_stl_cmd(params):
+    """
+    Export the CURRENT Blender scene's mesh(es) to binary STL(s) in the
+    project dir. Requires a prior successful edit.apply_chain (mesh in
+    scene) + Blender connected. Never raises across JSON-RPC: structured
+    {ok:false,...} on any failure so the Export screen can render it.
+
+    params: {slug, mode("none"|"zebra"|"quarter"), dst_dir?}
+    ok: {"ok": true, "mode", "dir", "count", "files":[{path,color,size}]}
+    """
+    import os
+    import time
+    from pathlib import Path
+    from slugify import slugify
+    from ops import export_stl
+
+    slug = slugify(params.get("slug") or "model")
+    mode = params.get("mode") or "none"
+    dst_dir = params.get("dst_dir") or str(
+        Path(os.environ.get("LOCALAPPDATA", Path.home()))
+        / "Conjure3D" / "projects" / slug
+    )
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    try:
+        result = export_stl.run(dst_dir, slug, ts, mode)
+        return {"ok": True, **result}
+    except Exception as exc:  # noqa: BLE001 — surface, never raise across RPC
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
 @register("slicer.launch")
 def slicer_launch(params):
     return _slicer.launch(params)

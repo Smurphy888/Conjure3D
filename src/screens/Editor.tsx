@@ -63,6 +63,11 @@ export function Editor() {
             }
             dispatch({ type: "SET_EDITS", edits });
             dispatch({ type: "SET_SANITY", lastSanity: result.sanity });
+            dispatch({
+                type: "SET_EDIT_META",
+                objectType: params.object_type,
+                colorSplitMode: params.color_split_mode,
+            });
             setCurrentGlbPath(result.preview_glb);
             dispatch({ type: "SET_GLB_PATH", selectedGlbPath: result.preview_glb });
             setApplyVersion((v) => v + 1);

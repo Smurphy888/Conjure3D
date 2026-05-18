@@ -99,6 +99,10 @@ export function deserializeProject(raw: unknown): DeserializeResult {
         selectedGlbPath: (doc.source_glb as string | null) ?? null,
         edits: (doc.edits as Edit[]) ?? [],
         lastSanity: (doc.last_sanity as ProjectState["lastSanity"]) ?? null,
+        objectType: (doc.object_type as ProjectState["objectType"]) ?? "vase",
+        colorSplitMode:
+            (doc.color_split_mode as ProjectState["colorSplitMode"]) ?? "none",
+        editApplied: Boolean((doc.edits as Edit[] | undefined)?.length),
     };
     return { state, project };
 }
