@@ -40,9 +40,9 @@ class GltfErrorBoundary extends Component<
                         {this.props.src}
                     </p>
                     <p style={{ fontSize: "0.8rem", color: "#aaa", maxWidth: 460 }}>
-                        The file is missing or unreadable. If you generated using the built-in
-                        sample (no real Meshy key active), this build may not have bundled the
-                        sample model — use real Meshy, or rebuild with fixtures bundled.
+                        The file is missing or unreadable. If you just applied edits,
+                        the edit chain likely failed (see the error message above the
+                        viewport) and no model was written — fix that and Apply again.
                     </p>
                 </div>
             );
@@ -91,7 +91,15 @@ export function ThreePreview({ src, height = 400 }: ThreePreviewProps) {
             {/* key={url} resets the boundary when the source changes so a prior
                 failure doesn't stick across regenerate. */}
             <GltfErrorBoundary key={url} src={src}>
-                <Canvas camera={{ position: [0, 0, 5], fov: 45 }} style={{ position: "relative" }}>
+                <Canvas
+                    camera={{ position: [0, 0, 5], fov: 45 }}
+                    style={{ position: "relative" }}
+                    gl={{ alpha: false }}
+                >
+                    {/* Opaque scene bg so the "Loading…" hint behind the
+                        canvas can't bleed through transparent areas once the
+                        model paints. */}
+                    <color attach="background" args={["#0f0f0f"]} />
                     <ambientLight intensity={0.6} />
                     <directionalLight position={[5, 10, 5]} intensity={1} />
                     <Suspense fallback={null}>

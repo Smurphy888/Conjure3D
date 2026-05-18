@@ -7,10 +7,12 @@
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  /* NOT display:flex/place-items:center — that vertically centered #root and
+     CLIPPED any page taller than the viewport with no way to scroll (the
+     cut-off "Accept & Edit" button). Block flow + .container's min-height:100vh
+     keeps short pages centered while tall pages grow and the window scrolls. */
 }
 
 .container {

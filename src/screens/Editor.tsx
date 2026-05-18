@@ -43,6 +43,24 @@ export function Editor() {
                 edits,
                 dst_dir: "",
             });
+            // The orchestrator NEVER raises across JSON-RPC: it returns a
+            // preview_glb PATH plus errors[] even when nothing was written
+            // (e.g. Blender socket down -> "import failed: ..."). Trusting
+            // preview_glb blindly = trying to load a file that doesn't exist
+            // -> the misleading "could not load model". Surface errors and
+            // keep the previous good model instead of swapping to a path
+            // that was never produced.
+            if (result.errors && result.errors.length > 0) {
+                if (result.sanity) dispatch({ type: "SET_SANITY", lastSanity: result.sanity });
+                setError(
+                    "Edit chain failed — model NOT updated:\n• " +
+                        result.errors.join("\n• ") +
+                        "\n\n(Most common cause: Blender isn't connected. Open Blender, " +
+                        "click “Connect to Claude” in the BlenderMCP panel, wait for the " +
+                        "badge to go green, then Apply again.)"
+                );
+                return;
+            }
             dispatch({ type: "SET_EDITS", edits });
             dispatch({ type: "SET_SANITY", lastSanity: result.sanity });
             setCurrentGlbPath(result.preview_glb);
