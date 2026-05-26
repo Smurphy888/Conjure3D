@@ -33,6 +33,7 @@ REQUIRED_PROJECT_FIELDS = (
     "color_split_mode",
 )
 
+from blender_client import session_scope, BlenderConnectionError
 from ops import (
     import_glb,
     export_glb,
@@ -113,43 +114,61 @@ def apply_chain(params: dict) -> dict:
 
     errors: list[str] = []
 
+    # Wrap the whole chain in one persistent BlenderMCP connection. The
+    # third-party addon's daemon server thread is observed to silently die
+    # after the first main-thread heavy op when many short-lived connect/
+    # accept cycles run against it — one connection held for the full chain
+    # sidesteps that churn. Ops modules don't know about the session: their
+    # execute_blender_code() calls reuse the session's socket via a thread-
+    # local in blender_client.
     try:
-        import_glb.run(src_glb)
-    except Exception as exc:  # never cross JSON-RPC with a raise
+        with session_scope():
+            try:
+                import_glb.run(src_glb)
+            except Exception as exc:  # never cross JSON-RPC with a raise
+                return {
+                    "preview_glb": preview_glb,
+                    "sanity": dict(_FAILED_SANITY),
+                    "stl_paths": [],
+                    "errors": [f"import failed: {exc}"],
+                }
+
+            ordered = sorted(edits, key=lambda e: CANONICAL_ORDER.get(e.get("type"), 99))
+            for edit in ordered:
+                try:
+                    _run_edit(edit, object_type)
+                except Exception as exc:
+                    errors.append(f"{edit.get('type')}: {exc}")
+
+            try:
+                s = sanity_op.run()
+                sanity = {
+                    "manifold": s["boundary_edges"] == 0 and s["non_manifold_edges"] == 0,
+                    # color_split intentionally produces multiple components.
+                    "single_component": s["components"] == 1 or color_split_in_chain,
+                    "normals_outward": s["signed_volume"] > 0,
+                    "longest_dim_under_limit": (
+                        max(s["dims_mm"]) <= sanity_op.LONGEST_DIM_LIMIT_MM
+                    ),
+                    "dims_mm": s["dims_mm"],
+                }
+            except Exception as exc:
+                errors.append(f"sanity: {exc}")
+                sanity = dict(_FAILED_SANITY)
+
+            try:
+                export_glb.run(preview_glb)
+            except Exception as exc:
+                errors.append(f"export: {exc}")
+    except BlenderConnectionError as exc:
+        # session __enter__ failed — could not establish ANY connection to
+        # the BlenderMCP addon's socket. Nothing was sent; report cleanly.
         return {
             "preview_glb": preview_glb,
             "sanity": dict(_FAILED_SANITY),
             "stl_paths": [],
-            "errors": [f"import failed: {exc}"],
+            "errors": [f"Could not connect to Blender: {exc}"],
         }
-
-    ordered = sorted(edits, key=lambda e: CANONICAL_ORDER.get(e.get("type"), 99))
-    for edit in ordered:
-        try:
-            _run_edit(edit, object_type)
-        except Exception as exc:
-            errors.append(f"{edit.get('type')}: {exc}")
-
-    try:
-        s = sanity_op.run()
-        sanity = {
-            "manifold": s["boundary_edges"] == 0 and s["non_manifold_edges"] == 0,
-            # color_split intentionally produces multiple components.
-            "single_component": s["components"] == 1 or color_split_in_chain,
-            "normals_outward": s["signed_volume"] > 0,
-            "longest_dim_under_limit": (
-                max(s["dims_mm"]) <= sanity_op.LONGEST_DIM_LIMIT_MM
-            ),
-            "dims_mm": s["dims_mm"],
-        }
-    except Exception as exc:
-        errors.append(f"sanity: {exc}")
-        sanity = dict(_FAILED_SANITY)
-
-    try:
-        export_glb.run(preview_glb)
-    except Exception as exc:
-        errors.append(f"export: {exc}")
 
     return {
         "preview_glb": preview_glb,

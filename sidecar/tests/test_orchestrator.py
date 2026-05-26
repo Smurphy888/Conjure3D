@@ -1,4 +1,5 @@
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -6,6 +7,17 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import orchestrator
+
+
+# Orchestrator now wraps apply_chain in `with session_scope():` (one persistent
+# BlenderMCP connection across the whole chain — workaround for the addon's
+# silent server-thread death). The real session_scope tries to open a TCP
+# connection to 127.0.0.1:9876, which obviously fails in unit tests with no
+# Blender running. Patching it to a no-op context manager keeps the test
+# surface unchanged: the per-op mocks below still capture every call.
+@contextmanager
+def _noop_session(*args, **kwargs):
+    yield None
 
 
 GOOD_SANITY = {
@@ -41,6 +53,9 @@ def _patched(calls):
         return fn
 
     return [
+        # Bypass the real session_scope() TCP connect (Blender isn't running
+        # in unit tests). Ops mocks below capture every call the chain makes.
+        patch.object(orchestrator, "session_scope", _noop_session),
         patch.object(orchestrator.import_glb, "run", side_effect=rec("import")),
         patch.object(orchestrator.export_glb, "run", side_effect=rec("export")),
         patch.object(orchestrator.sanity_op, "run",
@@ -180,7 +195,8 @@ def test_unknown_edit_recorded_in_errors_not_raised():
 
 
 def test_import_failure_returns_structured_error_not_raise():
-    with patch.object(orchestrator.import_glb, "run",
+    with patch.object(orchestrator, "session_scope", _noop_session), \
+         patch.object(orchestrator.import_glb, "run",
                        side_effect=RuntimeError("boom")):
         result = orchestrator.apply_chain({
             "src_glb": "/p/s.glb", "edits": [], "dst_dir": "/p",
