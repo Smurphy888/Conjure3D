@@ -74,9 +74,12 @@ def execute_blender_code(
         retries = 1
 
     # Piggyback on an active session if one is bound to this thread.
+    # Session calls are for edit chains that may include heavy ops (GLB import,
+    # voxel-remesh, decimate); always give them at least HEAVY_TIMEOUT so a
+    # slow operation doesn't abort the whole chain at the 30 s socket deadline.
     sess = getattr(_tls, "session", None)
     if sess is not None:
-        return sess.execute_code(code, timeout=timeout)
+        return sess.execute_code(code, timeout=max(timeout, HEAVY_TIMEOUT))
 
     payload = json.dumps({"type": "execute_code", "params": {"code": code}}).encode("utf-8")
 

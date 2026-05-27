@@ -60,3 +60,15 @@ Copy-Item -Path $exePath -Destination (Join-Path $resourcesDir "sidecar.exe") -F
 
 $size = (Get-Item (Join-Path $resourcesDir "sidecar.exe")).Length / 1MB
 Write-Host "sidecar.exe copied to src-tauri\resources\ ($([math]::Round($size, 1)) MB)"
+
+# Also stage the BlenderMCP addon zip so the installer always has the latest
+# vendored copy. The canonical source is sidecar\resources\; the Tauri bundle
+# pulls from src-tauri\resources\. Without this step, edits to the vendored
+# addon silently never reached the installer until someone manually ran
+# scripts\package-addon.ps1 — which is the exact class of bit-rot bug we just
+# spent the day debugging.
+& (Join-Path $PSScriptRoot "package-addon.ps1")
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "package-addon.ps1 failed"
+    exit 1
+}

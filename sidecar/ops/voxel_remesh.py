@@ -44,7 +44,12 @@ if obj is None or obj.type != 'MESH':
 
 obj.data.remesh_voxel_size = {voxel_size_m!r}
 obj.data.remesh_voxel_adaptivity = 0.0
-obj.data.use_remesh_smooth_normals = True
+# use_remesh_smooth_normals was removed in Blender 4.x; the smooth-normal
+# behaviour is now controlled per-face via shading, and our fix_normals op
+# handles normal hygiene later in the chain anyway. Guarded for safety in
+# case anyone runs this against a 3.x Blender.
+if hasattr(obj.data, "use_remesh_smooth_normals"):
+    obj.data.use_remesh_smooth_normals = True
 bpy.ops.object.voxel_remesh()
 
 print(json.dumps({{

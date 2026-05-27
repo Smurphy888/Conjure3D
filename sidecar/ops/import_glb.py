@@ -23,7 +23,17 @@ def run(filepath: str, timeout: float = DEFAULT_TIMEOUT) -> dict:
 import bpy
 import json
 
-bpy.ops.wm.read_factory_settings(use_empty=True)
+# Manual scene clear instead of bpy.ops.wm.read_factory_settings(use_empty=True).
+# read_factory_settings reloads factory preferences, which unregisters add-ons
+# that aren't enabled in the factory defaults — including the BlenderMCP add-on
+# we're talking to. That killed our persistent connection mid-chain. Clearing
+# datablocks directly leaves preferences (and the running server) untouched.
+for obj in list(bpy.data.objects):
+    bpy.data.objects.remove(obj, do_unlink=True)
+for collection in (bpy.data.meshes, bpy.data.materials, bpy.data.images, bpy.data.armatures, bpy.data.curves):
+    for item in list(collection):
+        if item.users == 0:
+            collection.remove(item)
 bpy.ops.import_scene.gltf(filepath={json.dumps(filepath)})
 
 mesh_objects = [o for o in bpy.context.scene.objects if o.type == 'MESH']
