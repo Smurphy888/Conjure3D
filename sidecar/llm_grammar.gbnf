@@ -1,0 +1,71 @@
+# GBNF grammar for the edit-chain JSON Phase J expects the LLM to emit.
+#
+# llama-cpp-python loads this as a constraint on token sampling: at every
+# step, only tokens that keep the partial output on a path to a valid
+# parse are admitted. As a result the model literally CANNOT emit:
+#   - malformed JSON
+#   - an unknown edit "type"
+#   - the wrong fields for a given type
+#   - a number where a string is required (or vice versa)
+#
+# This is layer 1 of edit-chain validation. Layer 2 is the Pydantic schema
+# in edit_chain_schema.py — it catches semantic violations the grammar
+# admits (e.g. target_mm = -5: a syntactically valid number but rejected).
+#
+# Mirror edit_chain_schema.py. Any new edit type must be added in both
+# places.
+
+root ::= "{" ws "\"edits\"" ws ":" ws "[" ws (edit (ws "," ws edit)*)? ws "]" ws "}"
+
+edit ::= edit-scale
+       | edit-voxel
+       | edit-keep-largest
+       | edit-recenter
+       | edit-flat-bottom
+       | edit-fix-normals
+       | edit-decimate
+       | edit-open-top
+       | edit-bridge
+       | edit-color-split
+
+# Each rule pins the discriminator string AND the field set the
+# corresponding Pydantic class accepts. Optional fields are guarded with
+# `?` so the model may emit them or not.
+
+edit-scale ::= "{" ws "\"type\"" ws ":" ws "\"scale_to_longest\"" ws "," ws
+                "\"target_mm\"" ws ":" ws number ws "}"
+
+edit-voxel ::= "{" ws "\"type\"" ws ":" ws "\"voxel_remesh\""
+                (ws "," ws "\"voxel_mm\"" ws ":" ws number)? ws "}"
+
+edit-keep-largest ::= "{" ws "\"type\"" ws ":" ws "\"keep_largest\"" ws "}"
+
+edit-recenter ::= "{" ws "\"type\"" ws ":" ws "\"recenter_xy\"" ws "}"
+
+edit-flat-bottom ::= "{" ws "\"type\"" ws ":" ws "\"flat_bottom\""
+                      (ws "," ws "\"cut_mm\"" ws ":" ws number)? ws "}"
+
+edit-fix-normals ::= "{" ws "\"type\"" ws ":" ws "\"fix_normals\"" ws "}"
+
+edit-decimate ::= "{" ws "\"type\"" ws ":" ws "\"decimate\"" ws "," ws
+                   "\"target_faces\"" ws ":" ws integer ws "}"
+
+edit-open-top ::= "{" ws "\"type\"" ws ":" ws "\"open_top\""
+                   (ws "," ws "\"cut_mm\"" ws ":" ws number)? ws "}"
+
+edit-bridge ::= "{" ws "\"type\"" ws ":" ws "\"bridge_top_loops\"" ws "}"
+
+edit-color-split ::= "{" ws "\"type\"" ws ":" ws "\"color_split\"" ws "," ws
+                      "\"mode\"" ws ":" ws color-split-mode
+                      (ws "," ws "\"count\"" ws ":" ws integer)? ws "}"
+
+color-split-mode ::= "\"none\"" | "\"zebra\"" | "\"quarter\""
+
+# Number literals. JSON allows leading minus + optional decimal + optional
+# exponent. We disallow exponent (no use case in this domain) and disallow
+# a bare "-" with no digits.
+number ::= "-"? integer ("." [0-9]+)?
+integer ::= "0" | [1-9] [0-9]*
+
+# Permissive whitespace, matching what llama.cpp's example grammars do.
+ws ::= [ \t\n]*

@@ -26,6 +26,11 @@ try {
     # SRC must be ABSOLUTE: with --specpath build, PyInstaller resolves a
     # relative --add-data source against the specpath (build/), not cwd.
     $fixturesSrc = Join-Path $sidecarDir "tests\fixtures"
+    # Phase J.1: also bundle the LLM grammar. llm.py loads it at runtime via
+    # sys._MEIPASS when frozen; without --add-data the grammar disappears
+    # from the bundle and constrained sampling falls back to free-form (a
+    # quiet, dangerous degradation rather than a loud failure).
+    $grammarSrc = Join-Path $sidecarDir "llm_grammar.gbnf"
     python -m PyInstaller `
         --onefile `
         --name sidecar `
@@ -34,6 +39,7 @@ try {
         --specpath build `
         --hidden-import=keyring.backends.Windows `
         --add-data "$fixturesSrc;tests/fixtures" `
+        --add-data "$grammarSrc;." `
         --noconfirm `
         main.py 2>&1 | Write-Host
     $pyrc = $LASTEXITCODE
