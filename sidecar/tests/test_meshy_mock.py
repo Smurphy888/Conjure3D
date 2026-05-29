@@ -6,7 +6,17 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import meshy_mock
-from main import dispatch
+
+# NOTE: this file used to import `dispatch` from main.py and exercise the
+# JSON-RPC wiring for the meshy.* methods. That wiring was changed in Phase F
+# (main.py:18 → `import meshy as _meshy`, the REAL Meshy API). Routing test
+# requests through dispatch() now hits the live Meshy service: it spends
+# credits and the assertions (mock-preview-*, mock-refine-*) fail by
+# construction. The four `test_dispatch_*` cases below are kept as a thin
+# guard that the mock module's public surface still returns mock-shaped IDs;
+# they bypass dispatch entirely. If you want to re-cover the dispatch wiring,
+# do it in a separate file with a monkeypatched _meshy fixture so it can't
+# accidentally regress into firing live calls.
 
 
 def setup_function():
@@ -104,35 +114,29 @@ def test_set_fixture_invalid_raises():
         meshy_mock.set_fixture({"name": "invalid"})
 
 
-# ── dispatch integration ──────────────────────────────────────────────────────
+# ── mock public surface (formerly dispatch integration) ──────────────────────
+# Names kept stable so CI history / pytest selectors don't churn. Bodies now
+# exercise meshy_mock directly; see the file-level NOTE above for why.
 
 def test_dispatch_generate_preview():
-    req = {"jsonrpc": "2.0", "id": 1, "method": "meshy.generate_preview", "params": {"prompt": "vase"}}
-    resp = dispatch(req)
-    assert "error" not in resp
-    assert resp["result"]["task_id"].startswith("mock-preview-")
+    resp = meshy_mock.generate_preview({"prompt": "vase"})
+    assert resp["task_id"].startswith("mock-preview-")
 
 
 def test_dispatch_poll_task_succeeds_on_third():
-    gen_req = {"jsonrpc": "2.0", "id": 1, "method": "meshy.generate_preview", "params": {"prompt": "test"}}
-    task_id = dispatch(gen_req)["result"]["task_id"]
-
-    for i in range(2):
-        r = dispatch({"jsonrpc": "2.0", "id": i + 2, "method": "meshy.poll_task", "params": {"task_id": task_id}})
-        assert r["result"]["status"] == "PROCESSING"
-
-    r = dispatch({"jsonrpc": "2.0", "id": 4, "method": "meshy.poll_task", "params": {"task_id": task_id}})
-    assert r["result"]["status"] == "SUCCEEDED"
+    task_id = meshy_mock.generate_preview({"prompt": "test"})["task_id"]
+    for _ in range(2):
+        r = meshy_mock.poll_task({"task_id": task_id})
+        assert r["status"] == "PROCESSING"
+    r = meshy_mock.poll_task({"task_id": task_id})
+    assert r["status"] == "SUCCEEDED"
 
 
 def test_dispatch_set_fixture():
-    req = {"jsonrpc": "2.0", "id": 1, "method": "meshy.set_fixture", "params": {"name": "guitar"}}
-    resp = dispatch(req)
-    assert resp["result"]["fixture"] == "guitar"
+    resp = meshy_mock.set_fixture({"name": "guitar"})
+    assert resp["fixture"] == "guitar"
 
 
 def test_dispatch_refine():
-    req = {"jsonrpc": "2.0", "id": 1, "method": "meshy.refine", "params": {"preview_task_id": "mock-preview-abc"}}
-    resp = dispatch(req)
-    assert "error" not in resp
-    assert resp["result"]["task_id"].startswith("mock-refine-")
+    resp = meshy_mock.refine({"preview_task_id": "mock-preview-abc"})
+    assert resp["task_id"].startswith("mock-refine-")
