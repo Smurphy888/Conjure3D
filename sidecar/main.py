@@ -19,6 +19,8 @@ import meshy as _meshy  # REAL Meshy API (Phase F accepted by user 2026-05-18; s
 import orchestrator as _orchestrator  # real ops chain (Phase E #22)
 import slicer as _slicer  # Bambu Studio hand-off (Phase G #25)
 import project as _project  # .conjure3d.json save/load (Phase H #26)
+import llm as _llm  # NL editor (Phase J.2 — mocked backend; J.4 swaps to llama.cpp)
+from pydantic import ValidationError as _PydanticValidationError
 
 _KEYRING_SERVICE = "conjure3d"
 _KEYRING_ACCOUNT = "meshy_api_key"
@@ -183,6 +185,64 @@ def project_save(params):
 @register("project.load")
 def project_load(params):
     return _project.load(params)
+
+
+@register("llm.backend_info")
+def llm_backend_info(_params):
+    """Cheap, frontend-safe metadata about the active LLM backend. Used by
+    the AI Editor's status badge so the user can see whether they're
+    talking to the mock (J.2/J.3), local llama.cpp (J.4), or a remote
+    API (J.6). Never blocks; never spends a token."""
+    return {"backend": _llm.backend_name()}
+
+
+@register("llm.generate_chain")
+def llm_generate_chain(params):
+    """Turn a free-form user instruction into a validated edit chain.
+
+    params: {"user_prompt": str, "object_type"?: "vase"|"solid_decorative"|"flat_part",
+             "sanity"?: dict — current Sanity snapshot for context}
+    returns on success:
+        {"ok": True, "edits": [{...}, ...], "backend": str}
+    returns on validation failure (LLM emitted something Pydantic can't accept):
+        {"ok": False, "error_code": "schema_violation", "message": str}
+    returns on any other backend error:
+        {"ok": False, "error_code": "backend_error", "message": str}
+
+    We translate exceptions into structured errors here (instead of
+    letting them bubble to the dispatcher's generic internal-error path)
+    because the AI Editor needs to branch on the failure type: a
+    schema_violation gets a "retry with a clearer request" hint; a
+    backend_error gets a "the model crashed, fall back to manual" hint.
+    """
+    user_prompt = params.get("user_prompt", "")
+    object_type = params.get("object_type", "solid_decorative")
+    sanity = params.get("sanity")
+    try:
+        chain = _llm.generate_edit_chain(
+            user_prompt=user_prompt,
+            object_type=object_type,
+            sanity=sanity,
+        )
+    except _PydanticValidationError as exc:
+        return {
+            "ok": False,
+            "error_code": "schema_violation",
+            "message": str(exc),
+            "backend": _llm.backend_name(),
+        }
+    except Exception as exc:  # noqa: BLE001 — structured error, never raise across RPC
+        return {
+            "ok": False,
+            "error_code": "backend_error",
+            "message": f"{type(exc).__name__}: {exc}",
+            "backend": _llm.backend_name(),
+        }
+    return {
+        "ok": True,
+        "edits": chain.to_orchestrator_input(),
+        "backend": _llm.backend_name(),
+    }
 
 
 def dispatch(req):
