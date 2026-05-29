@@ -173,6 +173,46 @@ def export_stl_cmd(params):
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
+@register("export.threemf")
+def export_threemf_cmd(params):
+    """Export the current Blender scene as a Bambu-compatible .3mf with
+    the recipe baked in. Same input shape as export.stl plus the recipe
+    inputs (object_type, longest_mm) so the writer knows which preset
+    to embed.
+
+    params: {slug, mode("none"|"zebra"|"quarter"), object_type, longest_mm?, dst_dir?}
+    ok: {"ok": true, "path": str, "size": int, "object_count": int,
+         "filament_count": int, "mode": str, "object_type": str}
+    """
+    import os
+    import time
+    from pathlib import Path
+    from slugify import slugify
+    from ops import export_3mf
+
+    slug = slugify(params.get("slug") or "model")
+    mode = params.get("mode") or "none"
+    object_type = params.get("object_type") or "solid_decorative"
+    longest_mm = params.get("longest_mm")
+    dst_dir = params.get("dst_dir") or str(
+        Path(os.environ.get("LOCALAPPDATA", Path.home()))
+        / "Conjure3D" / "projects" / slug
+    )
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    try:
+        result = export_3mf.run(
+            dst_dir=dst_dir,
+            slug=slug,
+            ts=ts,
+            mode=mode,
+            object_type=object_type,
+            longest_mm=longest_mm,
+        )
+        return {"ok": True, **result}
+    except Exception as exc:  # noqa: BLE001 — surface, never raise across RPC
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
 @register("slicer.launch")
 def slicer_launch(params):
     return _slicer.launch(params)
