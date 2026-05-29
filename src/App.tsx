@@ -11,6 +11,7 @@ import { NewProject } from "./screens/NewProject";
 import { Generate } from "./screens/Generate";
 import { PreviewPick } from "./screens/PreviewPick";
 import { Editor } from "./screens/Editor";
+import { AIEditor } from "./screens/AIEditor";
 import { Export } from "./screens/Export";
 
 function AppRoutes({ settings, onWizardDone }: { settings: Settings; onWizardDone: () => void }) {
@@ -22,7 +23,16 @@ function AppRoutes({ settings, onWizardDone }: { settings: Settings; onWizardDon
             <Route path="/new-project" element={complete ? <NewProject /> : <Navigate to="/wizard" replace />} />
             <Route path="/generate" element={complete ? <Generate /> : <Navigate to="/wizard" replace />} />
             <Route path="/preview-pick" element={complete ? <PreviewPick /> : <Navigate to="/wizard" replace />} />
-            <Route path="/editor" element={complete ? <Editor /> : <Navigate to="/wizard" replace />} />
+            {/*
+              Phase J.3: the AI Editor is the primary editing surface at
+              /editor. The slider-based manual UI moves to /editor-manual,
+              reachable via the "Advanced (manual)" link in the AI Editor
+              header. PreviewPick.tsx and any other "navigate('/editor')"
+              caller now lands on the AI Editor by default, matching the
+              product's NL-first positioning.
+            */}
+            <Route path="/editor" element={complete ? <AIEditor /> : <Navigate to="/wizard" replace />} />
+            <Route path="/editor-manual" element={complete ? <Editor /> : <Navigate to="/wizard" replace />} />
             <Route path="/export" element={complete ? <Export /> : <Navigate to="/wizard" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

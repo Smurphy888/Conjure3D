@@ -84,7 +84,32 @@ export function Editor() {
 
     return (
         <div className="container">
-            <h2>Editor</h2>
+            {/*
+              Phase J.3: the AI Editor is the default editing surface
+              (route /editor). This component is now the "advanced
+              manual mode" — reached via the toggle at the top of the
+              AI Editor or directly at /editor-manual. The header
+              reflects that and offers a way back.
+            */}
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+                <h2 style={{ margin: 0 }}>Editor — Advanced (manual)</h2>
+                <button
+                    onClick={() => navigate("/editor")}
+                    style={{
+                        background: "none",
+                        border: "none",
+                        color: "#7af",
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                        padding: 0,
+                        font: "inherit",
+                        fontSize: "0.8rem",
+                    }}
+                    title="Switch back to the AI Editor"
+                >
+                    ← Back to AI Editor
+                </button>
+            </div>
 
             <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
                 {/* Parameter panel */}
