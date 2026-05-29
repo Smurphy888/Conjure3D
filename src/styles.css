@@ -19,12 +19,25 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* DON'T use justify-content: center directly — it clips any page taller
+     than 100vh because flex centring treats the container's height as
+     fixed and pushes overflowing items above/below the viewport with no
+     scroll path. Instead use the pseudo-element auto-margin trick: the
+     ::before / ::after take all the *spare* vertical space when content
+     is short (so short pages still centre vertically) and collapse to 0
+     when content overflows (so tall pages flow naturally and the body
+     scrolls). This was the J.3 dogfood bug — the AI Editor's Back/Next
+     buttons sat just below the viewport edge with no scroll. */
   min-height: 100vh;
   text-align: center;
   width: 100%;
   box-sizing: border-box;
   padding: 2rem 1rem;
+}
+.container::before,
+.container::after {
+  content: "";
+  margin: auto 0;
 }
 
 /* Centering fix: #root spanned shrink-to-fit so screens hugged the left.

@@ -347,7 +347,17 @@ export function AIEditor() {
                 </span>
             </div>
 
-            <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginTop: "1rem" }}>
+            {/*
+              The global `.container > div { width: min(640px, 100%) }` rule
+              caps every direct child at 640 px — fine for Home / Wizard, too
+              tight for this two-pane layout (360 px left + min 300 px right +
+              gap doesn't fit). Override here so the panels sit side-by-side
+              instead of wrapping (which made the page taller than the
+              viewport and pushed Back / Next off-screen during J.3 dogfood).
+              `width: min(1100px, 100%)` keeps the layout readable on small
+              windows and uses full width on larger ones.
+            */}
+            <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginTop: "1rem", width: "min(1100px, 100%)" }}>
                 {/* Left panel: NL prompt + plan editor */}
                 <div style={{ flex: "0 0 360px" }}>
                     <label style={{ fontSize: "0.85rem" }}>Describe your edits</label>
@@ -446,7 +456,26 @@ export function AIEditor() {
                 </div>
             </div>
 
-            <div style={{ marginTop: "1rem" }}>
+            {/*
+              Sticky bottom nav — Back / Next stay visible at the bottom of
+              the viewport no matter how tall the chain panel grows. This is
+              belt-and-braces: even after the styles.css overflow fix lets
+              the page scroll properly, the user shouldn't have to hunt for
+              the primary navigation. The right padding leaves clearance
+              for the fixed connection badge at bottom-right.
+            */}
+            <div
+                style={{
+                    position: "sticky",
+                    bottom: 0,
+                    marginTop: "1rem",
+                    padding: "0.75rem 0",
+                    paddingRight: "10rem",
+                    background: "linear-gradient(to top, rgba(15,15,15,1) 70%, rgba(15,15,15,0))",
+                    width: "min(1100px, 100%)",
+                    zIndex: 50,
+                }}
+            >
                 <button onClick={() => navigate("/preview-pick")}>Back</button>
                 {" "}
                 <button onClick={() => navigate("/export")} disabled={!sanityOk}>
