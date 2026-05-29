@@ -143,7 +143,19 @@ def apply_chain(params: dict) -> dict:
             try:
                 s = sanity_op.run()
                 sanity = {
-                    "manifold": s["boundary_edges"] == 0 and s["non_manifold_edges"] == 0,
+                    # color_split (zebra) bisects the mesh into bands; each
+                    # band has open boundary edges at its cut planes BY
+                    # DESIGN. The slicer prints each band with its assigned
+                    # filament and the pieces tile together — boundary
+                    # edges at cut planes are not a defect. Same reasoning
+                    # as the single_component relaxation below: when the
+                    # chain explicitly includes color_split, the post-split
+                    # geometry is what the user asked for. Without this,
+                    # every multi-colour print shows a misleading red
+                    # manifold flag and users assume the chain failed.
+                    "manifold": (
+                        s["boundary_edges"] == 0 and s["non_manifold_edges"] == 0
+                    ) or color_split_in_chain,
                     # color_split intentionally produces multiple components.
                     "single_component": s["components"] == 1 or color_split_in_chain,
                     "normals_outward": s["signed_volume"] > 0,

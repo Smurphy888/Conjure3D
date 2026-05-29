@@ -183,6 +183,56 @@ def test_color_split_chain_marks_single_component_true_despite_multi():
     assert result["sanity"]["single_component"] is True
 
 
+def test_color_split_chain_marks_manifold_true_despite_cut_boundary_edges():
+    """zebra color_split bisects the mesh into bands; each band has open
+    boundary edges at its cut planes BY DESIGN. The orchestrator must
+    relax the manifold flag when color_split is in the chain — without
+    this, every multi-colour print shows a misleading red manifold flag
+    even though the geometry is exactly what the user asked for. Same
+    reasoning as the single_component relaxation, tested above."""
+    with_boundary = dict(GOOD_SANITY)
+    with_boundary["boundary_edges"] = 480  # representative count from a real zebra split
+    calls = []
+    ctxs = _patched(calls)
+    for c in ctxs:
+        c.start()
+    orchestrator.sanity_op.run.side_effect = lambda *a, **k: dict(with_boundary)
+    try:
+        result = orchestrator.apply_chain({
+            "src_glb": "/p/s.glb",
+            "edits": [{"type": "color_split", "mode": "zebra", "count": 8}],
+            "dst_dir": "/p",
+        })
+    finally:
+        for c in ctxs:
+            c.stop()
+    assert result["sanity"]["manifold"] is True
+
+
+def test_manifold_still_strict_without_color_split():
+    """Belt-and-braces: the manifold relaxation must NOT apply when
+    color_split is absent. A chain that ends up with boundary edges
+    for any other reason (failed voxel_remesh, etc.) still surfaces
+    as manifold=False so the user sees the real problem."""
+    with_boundary = dict(GOOD_SANITY)
+    with_boundary["boundary_edges"] = 42
+    calls = []
+    ctxs = _patched(calls)
+    for c in ctxs:
+        c.start()
+    orchestrator.sanity_op.run.side_effect = lambda *a, **k: dict(with_boundary)
+    try:
+        result = orchestrator.apply_chain({
+            "src_glb": "/p/s.glb",
+            "edits": [{"type": "fix_normals"}],  # no color_split
+            "dst_dir": "/p",
+        })
+    finally:
+        for c in ctxs:
+            c.stop()
+    assert result["sanity"]["manifold"] is False
+
+
 def test_unknown_edit_recorded_in_errors_not_raised():
     result, _ = _run({
         "src_glb": "/p/s.glb",
