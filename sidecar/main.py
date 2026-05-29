@@ -192,8 +192,16 @@ def llm_backend_info(_params):
     """Cheap, frontend-safe metadata about the active LLM backend. Used by
     the AI Editor's status badge so the user can see whether they're
     talking to the mock (J.2/J.3), local llama.cpp (J.4), or a remote
-    API (J.6). Never blocks; never spends a token."""
-    return {"backend": _llm.backend_name()}
+    API (J.6). Never blocks; never spends a token.
+
+    install_status surfaces *why* we're on the mock, so the AI Editor
+    can tell the user "model not downloaded yet" vs "library missing"
+    vs "model failed to load" without us having to add a separate
+    diagnostic endpoint."""
+    return {
+        "backend": _llm.backend_name(),
+        "install_status": _llm.install_status(),
+    }
 
 
 @register("llm.generate_chain")
@@ -325,4 +333,17 @@ def run_loop(stdin=None, stdout=None):
 
 
 if __name__ == "__main__":
+    # Phase J.4: try to swap in the real llama-cpp backend before the
+    # RPC loop accepts requests. Failure (no library, no model file,
+    # load error) is silently absorbed — the AI Editor stays on the
+    # mock and surfaces the reason via llm.install_status.
+    try:
+        status = _llm.try_install_llama_backend()
+        print(f"[sidecar] LLM backend install: {status}", file=sys.stderr, flush=True)
+    except Exception as exc:  # noqa: BLE001 — defensive; never block startup
+        print(
+            f"[sidecar] LLM backend install raised (shouldn't happen): {exc}",
+            file=sys.stderr,
+            flush=True,
+        )
     run_loop()

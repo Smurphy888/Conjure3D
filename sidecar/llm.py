@@ -252,3 +252,69 @@ def generate_edit_chain(
     the backend raises. The JSON-RPC dispatcher in main.py is responsible
     for catching and translating to a structured error."""
     return _backend.generate(user_prompt, object_type, sanity)
+
+
+# ── Real-backend installer (Phase J.4) ───────────────────────────────────────
+#
+# Called once at sidecar startup. Probes for the llama-cpp-python library
+# AND the GGUF model file; if both are present, builds a LlamaCppBackend
+# and swaps it in. If anything is missing, logs to stderr (visible in
+# Conjure3D's diagnostic logs) and leaves the mock in place — the AI
+# Editor stays usable, just less smart.
+#
+# A status string is returned so the JSON-RPC command `llm.backend_info`
+# can surface "real" vs "mock" + the reason, useful for the AI Editor's
+# "Powered by" badge and for debugging "why didn't the LLM load?".
+
+
+_install_status: str = "not_attempted"
+
+
+def try_install_llama_backend(model_path_override: str | None = None) -> str:
+    """Attempt to swap in the real llama-cpp backend. Always safe to
+    call; never raises. Returns one of:
+
+      - "installed"               — backend was swapped to llama.cpp
+      - "library_unavailable"     — llama-cpp-python not importable
+      - "model_missing"           — library present but no GGUF on disk
+      - "load_failed: <reason>"   — library + file present but Llama()
+                                    construction raised (OOM, corrupt
+                                    file, missing DLLs, etc.)
+    """
+    global _install_status
+    # Lazy import inside the function so importing llm.py does NOT pull in
+    # llm_llama_cpp's module-level state (which would chain into a
+    # llama_cpp probe). Keeps the import graph clean for dev environments
+    # without the dep.
+    from llm_llama_cpp import (
+        LlamaCppBackend,
+        LlamaBackendUnavailable,
+        find_model_path,
+        grammar_path,
+        llama_cpp_importable,
+    )
+
+    if not llama_cpp_importable():
+        _install_status = "library_unavailable"
+        return _install_status
+
+    model = find_model_path(model_path_override)
+    if model is None:
+        _install_status = "model_missing"
+        return _install_status
+
+    backend = LlamaCppBackend(model_path=model, grammar_path=grammar_path())
+    try:
+        backend.warm_up()
+    except LlamaBackendUnavailable as exc:
+        _install_status = f"load_failed: {exc}"
+        return _install_status
+
+    set_backend(backend)
+    _install_status = "installed"
+    return _install_status
+
+
+def install_status() -> str:
+    """The result of the most recent install attempt (or 'not_attempted')."""
+    return _install_status

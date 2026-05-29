@@ -229,9 +229,15 @@ def test_dispatch_llm_generate_chain_success():
 
 
 def test_dispatch_llm_backend_info():
+    """backend_info now carries install_status (Phase J.4 addition) so
+    the AI Editor can surface "library_unavailable" / "model_missing"
+    / "load_failed" alongside the backend name. Assert on the fields
+    we care about, not the whole dict, so future additions don't break."""
     req = {"jsonrpc": "2.0", "id": 2, "method": "llm.backend_info", "params": {}}
     resp = main.dispatch(req)
-    assert resp["result"] == {"backend": "mock-keyword-router"}
+    res = resp["result"]
+    assert res["backend"] == "mock-keyword-router"
+    assert "install_status" in res
 
 
 def test_dispatch_translates_backend_error_to_structured_error():
