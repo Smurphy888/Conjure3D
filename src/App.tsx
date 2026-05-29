@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
 import { type Settings, DEFAULT_SETTINGS, readSettings, wizardComplete } from "./lib/settings";
+import { invokeSidecar } from "./lib/ipc";
 import { ProjectProvider } from "./lib/projectState";
 import { ConnectionProvider } from "./lib/connectionContext";
 import { ConnectionBadge } from "./components/ConnectionBadge";
+import { ModelDownloadChip } from "./components/ModelDownloadChip";
 import { Wizard } from "./Wizard";
 import { Home } from "./Home";
 import { NewProject } from "./screens/NewProject";
@@ -77,6 +79,19 @@ function App() {
     function handleWizardDone() {
         setForceWizard(false);
         readSettings().then(setSettings).catch(() => {});
+        // Phase J.5: background prefetch of the AI model. Fire-and-forget;
+        // the sidecar's downloader is idempotent (calling start while
+        // already in progress returns the current status, doesn't spawn
+        // a duplicate thread). The ModelDownloadChip handles UX. We
+        // ONLY trigger on this explicit "wizard just finished" event,
+        // never on subsequent app starts — if the user cancels the
+        // download they should not have it re-kicked off automatically;
+        // the chip's modal has an explicit Retry button for that.
+        invokeSidecar("llm.download_start").catch(() => {
+            // Network or sidecar error — the chip will surface the
+            // resulting error_phase. Swallowing here is correct because
+            // the wizard-done flow has nothing user-facing to show.
+        });
     }
 
     return (
@@ -85,6 +100,7 @@ function App() {
                 <ProjectProvider>
                     <AppRoutes settings={effective} onWizardDone={handleWizardDone} />
                     <ConnectionBadge />
+                    <ModelDownloadChip />
                 </ProjectProvider>
             </ConnectionProvider>
         </HashRouter>

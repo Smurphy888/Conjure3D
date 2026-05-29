@@ -20,6 +20,7 @@ import orchestrator as _orchestrator  # real ops chain (Phase E #22)
 import slicer as _slicer  # Bambu Studio hand-off (Phase G #25)
 import project as _project  # .conjure3d.json save/load (Phase H #26)
 import llm as _llm  # NL editor (Phase J.2 — mocked backend; J.4 swaps to llama.cpp)
+import llm_model_download as _model_dl  # Phase J.5 — resumable GGUF download
 from pydantic import ValidationError as _PydanticValidationError
 
 _KEYRING_SERVICE = "conjure3d"
@@ -202,6 +203,34 @@ def llm_backend_info(_params):
         "backend": _llm.backend_name(),
         "install_status": _llm.install_status(),
     }
+
+
+@register("llm.model_status")
+def llm_model_status(_params):
+    """Snapshot of the model-file download state plus a model_present
+    bool. Polled by the AI Editor / app-shell chip every ~500 ms while
+    a download is active. Cheap; no I/O beyond the dest_path stat."""
+    return _model_dl.get_downloader().status()
+
+
+@register("llm.download_start")
+def llm_download_start(params):
+    """Start (or resume) a model download. Idempotent: calling while
+    a download is already in progress returns the current status
+    rather than spawning a second thread. The wizard's completion
+    hook calls this for background prefetch; the AI Editor's "Retry"
+    button also calls it after a failed attempt."""
+    url = params.get("url") or _model_dl.DEFAULT_MODEL_URL
+    expected_sha = params.get("expected_sha256")
+    dl = _model_dl.get_downloader(url=url, expected_sha256=expected_sha)
+    return dl.start()
+
+
+@register("llm.download_cancel")
+def llm_download_cancel(_params):
+    """Signal the worker to stop. Leaves the .partial file on disk so
+    a subsequent llm.download_start picks up where it left off."""
+    return _model_dl.get_downloader().cancel()
 
 
 @register("llm.generate_chain")
