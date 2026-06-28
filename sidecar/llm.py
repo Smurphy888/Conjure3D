@@ -98,6 +98,17 @@ _COUNT_NEAR_COLOR_RE = re.compile(
 _VASE_KEYWORDS = ("vase", "open top", "hollow", "container", "cup", "pot")
 _COLOR_SPLIT_KEYWORDS = ("color", "colour", "multicolor", "filament", "band", "zebra")
 _QUARTER_KEYWORDS = ("quarter", "wedge", "wedges", "sectors", "sectored")
+# Negation guard: these phrases mean the user explicitly wants NO color split.
+# Checked before _COLOR_SPLIT_KEYWORDS so "single color" / "solid color" / etc.
+# don't match the bare "color" needle and trigger a zebra split by accident.
+_SINGLE_COLOR_KEYWORDS = (
+    "single color", "single colour",
+    "one color", "one colour",
+    "solid color", "solid colour",
+    "monochrome", "no color split", "no colour split",
+    "single filament", "no split",
+    "1 color", "1 colour",
+)
 _FLAT_BOTTOM_KEYWORDS = ("flat bottom", "flat base", "stable", "sit flat", "flatten the base")
 _LIGHT_KEYWORDS = ("light", "lighter", "less detail", "low poly", "simpler", "lower poly")
 _DETAIL_KEYWORDS = ("detail", "detailed", "preserve", "high poly", "fine")
@@ -179,8 +190,14 @@ class MockBackend:
         target_mm = _detect_target_mm(text, default=80.0)
         skip_clean = _matches_any(text, _NO_CLEAN_KEYWORDS)
         vase_like = object_type == "vase" or _matches_any(text, _VASE_KEYWORDS)
-        wants_color = _matches_any(text, _COLOR_SPLIT_KEYWORDS) or _matches_any(text, _QUARTER_KEYWORDS)
-        wants_quarter = _matches_any(text, _QUARTER_KEYWORDS)
+        # Negation guard must be checked before the color keyword scan so that
+        # "single color" / "solid color" / etc. don't false-positive on the
+        # bare "color" needle in _COLOR_SPLIT_KEYWORDS.
+        no_color_split = _matches_any(text, _SINGLE_COLOR_KEYWORDS)
+        wants_color = (not no_color_split) and (
+            _matches_any(text, _COLOR_SPLIT_KEYWORDS) or _matches_any(text, _QUARTER_KEYWORDS)
+        )
+        wants_quarter = (not no_color_split) and _matches_any(text, _QUARTER_KEYWORDS)
 
         # Solid / flat_part want a flat base by default; vases don't
         # (open_top + bridge handle the top, and a vase usually sits

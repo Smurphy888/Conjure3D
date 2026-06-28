@@ -160,6 +160,26 @@ def test_no_color_keyword_omits_color_split():
     assert "color_split" not in _types(chain)
 
 
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "vase, 80mm tall, single color",
+        "solid color vase",
+        "one colour please",
+        "monochrome model",
+        "80mm, no color split",
+        "1 color",
+    ],
+)
+def test_single_color_phrases_suppress_color_split(prompt):
+    """Explicit single-color intent must NOT produce a color_split edit.
+    Regression for: 'single color' matching the bare 'color' needle."""
+    chain = llm.generate_edit_chain(prompt, object_type="vase")
+    assert "color_split" not in _types(chain), (
+        f"color_split unexpectedly generated for prompt: {prompt!r}"
+    )
+
+
 # ── Style / detail routing ──────────────────────────────────────────────────
 
 
