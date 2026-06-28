@@ -16,6 +16,7 @@ raises across the JSON-RPC boundary, so the Editor always gets a structured
 response it can render.
 """
 import os
+import sys
 import time
 
 # ── Persisted-project schema mirror (Phase H Issue #26) ──────────────────────
@@ -196,8 +197,13 @@ def apply_chain(params: dict) -> dict:
                     object_type=object_type,
                 )
                 threemf_path = baked.get("path")
-            except Exception:
-                pass  # Export screen falls back to live export.threemf call
+            except Exception as bake_exc:
+                print(
+                    f"[orchestrator] pre-bake .3mf failed (non-fatal): "
+                    f"{type(bake_exc).__name__}: {bake_exc}",
+                    file=sys.stderr,
+                    flush=True,
+                )
     except BlenderConnectionError as exc:
         # session __enter__ failed — could not establish ANY connection to
         # the BlenderMCP addon's socket. Nothing was sent; report cleanly.
