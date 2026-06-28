@@ -84,13 +84,13 @@ function recipe(objectType: string, longestMm: number | null): string {
 
 export function Export() {
     const navigate = useNavigate();
-    const { name, objectType, colorSplitMode, editApplied, lastSanity } = useProjectState();
+    const { name, objectType, colorSplitMode, editApplied, lastSanity, prebaked3mfPath } = useProjectState();
     const { state: connState } = useConnection();
     const gate = editChainGate(connState);
 
     const [busy, setBusy] = useState(false);
     const [files, setFiles] = useState<StlFile[] | null>(null);
-    const [threemfPath, setThreemfPath] = useState<string | null>(null);
+    const [threemfPath, setThreemfPath] = useState<string | null>(prebaked3mfPath);
     const [threemfInfo, setThreemfInfo] = useState<ThreemfResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [launched, setLaunched] = useState(false);

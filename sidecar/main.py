@@ -210,6 +210,7 @@ def export_threemf_cmd(params):
         )
         return {"ok": True, **result}
     except Exception as exc:  # noqa: BLE001 — surface, never raise across RPC
+        print(f"[export.threemf] {type(exc).__name__}: {exc}", file=sys.stderr)
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
 

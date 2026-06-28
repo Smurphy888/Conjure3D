@@ -16,6 +16,10 @@ export interface ProjectState {
     objectType: ObjectType;
     colorSplitMode: ColorSplitMode;
     editApplied: boolean;
+    /** .3mf written during apply_chain (while Blender session was live).
+     *  Null if pre-bake failed or no Apply has run. Export uses this to
+     *  skip the fresh-connect step that fails after session_scope closes. */
+    prebaked3mfPath: string | null;
 }
 
 export const INITIAL_STATE: ProjectState = {
@@ -28,6 +32,7 @@ export const INITIAL_STATE: ProjectState = {
     objectType: "vase",
     colorSplitMode: "none",
     editApplied: false,
+    prebaked3mfPath: null,
 };
 
 export type ProjectAction =
@@ -37,7 +42,7 @@ export type ProjectAction =
     | { type: "SET_GLB_PATH"; selectedGlbPath: string }
     | { type: "SET_EDITS"; edits: Edit[] }
     | { type: "SET_SANITY"; lastSanity: Sanity }
-    | { type: "SET_EDIT_META"; objectType: ObjectType; colorSplitMode: ColorSplitMode }
+    | { type: "SET_EDIT_META"; objectType: ObjectType; colorSplitMode: ColorSplitMode; prebaked3mfPath?: string | null }
     | { type: "RESET" };
 
 export function projectReducer(state: ProjectState, action: ProjectAction): ProjectState {
@@ -60,6 +65,7 @@ export function projectReducer(state: ProjectState, action: ProjectAction): Proj
                 objectType: action.objectType,
                 colorSplitMode: action.colorSplitMode,
                 editApplied: true,
+                prebaked3mfPath: action.prebaked3mfPath ?? null,
             };
         case "RESET":
             return { ...INITIAL_STATE };

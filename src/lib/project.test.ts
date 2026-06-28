@@ -16,6 +16,7 @@ const state: ProjectState = {
     objectType: "vase",
     colorSplitMode: "zebra",
     editApplied: true,
+    prebaked3mfPath: null,
 };
 
 describe("serializeProject", () => {

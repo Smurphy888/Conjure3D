@@ -16,6 +16,7 @@ raises across the JSON-RPC boundary, so the Editor always gets a structured
 response it can render.
 """
 import os
+import time
 
 # ── Persisted-project schema mirror (Phase H Issue #26) ──────────────────────
 # The canonical schema lives in src/lib/types.ts (`ConjureProject`). The
@@ -37,6 +38,7 @@ from blender_client import session_scope, BlenderConnectionError
 from ops import (
     import_glb,
     export_glb,
+    export_3mf,
     sanity as sanity_op,
     normalize,
     voxel_remesh,
@@ -172,6 +174,30 @@ def apply_chain(params: dict) -> dict:
                 export_glb.run(preview_glb)
             except Exception as exc:
                 errors.append(f"export: {exc}")
+
+            # Pre-bake .3mf while the session is still open. The BlenderMCP
+            # addon's TCP thread dies when session_scope exits, so a fresh
+            # connect at export time fails after ~7.5 s of retries. Running
+            # export_3mf.run() here reuses the live socket via the thread-local
+            # in blender_client. Best-effort only: failure sets threemf_path to
+            # None and NEVER touches errors[] so it cannot block editApplied.
+            threemf_path = None
+            try:
+                slug = os.path.basename(dst_dir) or "model"
+                cs_edit = next(
+                    (e for e in edits if e.get("type") == "color_split"), None
+                )
+                cs_mode = cs_edit.get("mode", "none") if cs_edit else "none"
+                baked = export_3mf.run(
+                    dst_dir=dst_dir,
+                    slug=slug,
+                    ts=time.strftime("%Y%m%d-%H%M%S"),
+                    mode=cs_mode,
+                    object_type=object_type,
+                )
+                threemf_path = baked.get("path")
+            except Exception:
+                pass  # Export screen falls back to live export.threemf call
     except BlenderConnectionError as exc:
         # session __enter__ failed — could not establish ANY connection to
         # the BlenderMCP addon's socket. Nothing was sent; report cleanly.
@@ -187,4 +213,5 @@ def apply_chain(params: dict) -> dict:
         "sanity": sanity,
         "stl_paths": [],
         "errors": errors,
+        "threemf_path": threemf_path,
     }

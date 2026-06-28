@@ -316,6 +316,7 @@ export function AIEditor() {
                 type: "SET_EDIT_META",
                 objectType: hasOpenTop ? "vase" : objectType === "vase" ? "solid_decorative" : objectType,
                 colorSplitMode: (cs?.mode as ColorSplitMode | undefined) ?? "none",
+                prebaked3mfPath: result.threemf_path ?? null,
             });
             setCurrentGlbPath(result.preview_glb);
             dispatch({ type: "SET_GLB_PATH", selectedGlbPath: result.preview_glb });

@@ -19,6 +19,10 @@ export interface EditChainResult {
     sanity: Sanity;
     stl_paths: string[];
     errors?: string[];
+    /** Path to a .3mf pre-baked during apply_chain while the Blender session
+     *  was still live. Present on success; absent if pre-bake failed or the
+     *  chain itself errored. Used by Export to skip the fresh-connect step. */
+    threemf_path?: string;
 }
 
 /** Current persisted-project schema version (Phase H Issue #26). The

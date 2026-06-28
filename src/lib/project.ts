@@ -103,6 +103,7 @@ export function deserializeProject(raw: unknown): DeserializeResult {
         colorSplitMode:
             (doc.color_split_mode as ProjectState["colorSplitMode"]) ?? "none",
         editApplied: Boolean((doc.edits as Edit[] | undefined)?.length),
+        prebaked3mfPath: null,
     };
     return { state, project };
 }
