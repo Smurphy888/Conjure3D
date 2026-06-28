@@ -5,19 +5,21 @@ import { AboutDialog } from "./components/AboutDialog";
 import { appVersion } from "./lib/about";
 
 export function Home() {
-    const [sidecarStatus, setSidecarStatus] = useState("loading...");
+    const [sidecarError, setSidecarError] = useState<string | null>(null);
     const navigate = useNavigate();
 
     useEffect(() => {
         invokeSidecar<{ ok: boolean; msg: string }>("system.ping")
-            .then((result) => setSidecarStatus(`Sidecar: ${result.msg}`))
-            .catch((err) => setSidecarStatus(`Sidecar error: ${String(err)}`));
+            .then(() => setSidecarError(null))
+            .catch((err) => setSidecarError(`Sidecar error: ${String(err)}`));
     }, []);
 
     return (
         <div className="container">
             <h1>Conjure3D v{appVersion()}</h1>
-            <p>{sidecarStatus}</p>
+            {sidecarError && (
+                <p style={{ color: "#ff6b6b", fontSize: "0.85rem" }}>{sidecarError}</p>
+            )}
             <button onClick={() => navigate("/new-project")}>New Project</button>
             <div style={{ marginTop: "1.25rem" }}>
                 <AboutDialog />
