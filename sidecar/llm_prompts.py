@@ -92,7 +92,7 @@ _EDIT_CATALOGUE: list[tuple[str, str, str]] = [
     (
         "color_split",
         'split into multi-filament groups: "zebra" = N horizontal bands, '
-        '"quarter" = bands × wedges = 8 objects, "none" = no split',
+        '"quarter" = 4 geometric wedges (same filament), "none" = no split',
         '{"type":"color_split","mode":"zebra"|"quarter"|"none","count":<int 2–32, default 8>}',
     ),
 ]

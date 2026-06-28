@@ -214,7 +214,7 @@ def test_flat_part_recipe_uses_thinner_brim_and_more_walls():
     [
         ("solid_decorative", "none", 1),
         ("solid_decorative", "zebra", 2),
-        ("solid_decorative", "quarter", 2),
+        ("solid_decorative", "quarter", 1),  # quarter = geometric split, 1 filament
         ("vase", "zebra", 2),
         ("flat_part", "none", 1),
     ],

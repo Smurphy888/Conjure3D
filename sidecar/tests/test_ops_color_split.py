@@ -51,11 +51,13 @@ def test_zebra_code_uses_bisect_fill_and_two_groups():
 
 
 def test_quarter_code_uses_boolean_intersect_exact():
+    """Quarter produces 4 geometric wedges via Boolean INTERSECT EXACT,
+    no horizontal banding, no material assignment. Regression for: old
+    quarter created 2 bands x 4 wedges = 8 objects with 2 colours."""
     captured = {}
     def fake(code, timeout=None, **kwargs):
         captured['code'] = code
-        return ('{"skipped": false, "mode": "quarter", "objects": 8, '
-                '"bands": 2, "wedges_per_band": 4}')
+        return '{"skipped": false, "mode": "quarter", "objects": 4, "wedges": 4}'
     with patch("ops.color_split.execute_blender_code", side_effect=fake):
         out = color_split.run("quarter")
     code = captured['code']
@@ -63,8 +65,11 @@ def test_quarter_code_uses_boolean_intersect_exact():
     assert "m.operation = 'INTERSECT'" in code
     assert "m.solver = 'EXACT'" in code
     assert code.count("_cutter(") >= 4  # four cutter cubes
-    assert out["objects"] == 8
-    assert out["bands"] == 2
+    assert "_slab(band," not in code     # _slab defined in preamble but not called
+    assert "_assign(wedge," not in code  # no colour assignment on wedges
+    assert "Conjure_Q{qi}" in code      # single index names (no bi prefix)
+    assert out["objects"] == 4
+    assert out["wedges"] == 4
 
 
 def test_color_split_raises_when_stdout_has_no_json_line():
@@ -127,11 +132,11 @@ def test_live_zebra_8_yields_two_meshes_volume_preserved():
 
 
 @pytest.mark.skipif(not _port_open(), reason=_LIVE_REASON)
-def test_live_quarter_yields_eight_meshes_volume_preserved():
-    """Acceptance: quarter -> 8 meshes, volume sum within 1%."""
+def test_live_quarter_yields_four_meshes_volume_preserved():
+    """Acceptance: quarter -> 4 geometric wedges, volume sum within 1%."""
     _prep_vase()
     before = _signed_volume_of_all_meshes()
     stats = color_split.run("quarter")
-    assert stats["objects"] == 8 and stats["bands"] == 2
+    assert stats["objects"] == 4 and stats["wedges"] == 4
     after = _signed_volume_of_all_meshes()
     assert abs(after - before) / before <= 0.01, f"volume drift: {before}->{after}"

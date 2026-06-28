@@ -5,13 +5,8 @@ Modes:
   none     — no split; returns {"skipped": True} WITHOUT contacting Blender.
   zebra    — bisect the mesh into N horizontal bands, alternate red/yellow,
              then group all bands of each color into one object -> 2 objects.
-  quarter  — 2-band zebra alternation, each band quartered into 4 angular
-             wedges via Boolean INTERSECT (EXACT solver) -> 8 objects.
-
-Spec disambiguation (quarter): pipeline.md says "4 wedge sets per color" and
-ISSUES.md #21 says "4 wedges per color (8 outputs)". Read as 4 angular wedges
-x 2 alternating colors = 8 output meshes. Documented here so a live-test
-mismatch is cheap to reconcile.
+  quarter  — 4 pure geometric wedges via Boolean INTERSECT (EXACT solver),
+             same filament (no color assignment) → 4 objects.
 
 HANDOFF pitfall: `bisect ... use_fill=True` makes T-junction artifacts on
 *multi-component* meshes, and color quartering must use Boolean Intersect
@@ -114,8 +109,7 @@ def run(mode: str, count: int = DEFAULT_ZEBRA_COUNT,
             for mode ``zebra``:  {"skipped": False, "mode": "zebra",
                                    "objects": 2, "bands": count}
             for mode ``quarter``:{"skipped": False, "mode": "quarter",
-                                   "objects": 8, "bands": 2,
-                                   "wedges_per_band": 4}
+                                   "objects": 4, "wedges": 4}
     """
     if mode not in _MODES:
         raise ValueError(f"mode must be one of {_MODES}, got {mode!r}")
@@ -130,7 +124,7 @@ def run(mode: str, count: int = DEFAULT_ZEBRA_COUNT,
             raise ValueError(f"zebra count must be >= 2, got {count}")
         return _last_json(execute_blender_code(_zebra_code(count), timeout=timeout))
 
-    # QUARTER
+    # QUARTER — 4 geometric wedges, single filament
     return _last_json(execute_blender_code(_quarter_code(), timeout=timeout))
 
 
@@ -162,7 +156,6 @@ def _quarter_code() -> str:
     return f"""\
 {_PREAMBLE}
 zmin, zmax, xmin, xmax, ymin, ymax = _world_bounds(src)
-mid_z = (zmin + zmax) / 2.0
 span = max(xmax - xmin, ymax - ymin, zmax - zmin) * 4.0 + 1.0
 
 
@@ -177,31 +170,24 @@ def _cutter(name, sx, sy):
     return c
 
 
-# Four cutter cubes, one per XY quadrant (centered on the world origin, since
-# recenter_xy already put the bbox center at X=0,Y=0).
+# Four cutter cubes, one per XY quadrant (centred on the world origin, since
+# recenter_xy already put the bbox centre at X=0,Y=0).
 cutters = [_cutter("cut_pp", 1, 1), _cutter("cut_np", -1, 1),
            _cutter("cut_nn", -1, -1), _cutter("cut_pn", 1, -1)]
 
 outputs = []
-# Two alternating-color horizontal bands.
-for bi, (z_lo, z_hi, mat) in enumerate((
-        (zmin, mid_z, MAT_RED), (mid_z, zmax, MAT_YELLOW))):
-    band = _dup(src)
-    _slab(band, z_lo, z_hi)
-    for qi, cutter in enumerate(cutters):
-        wedge = _dup(band)
-        m = wedge.modifiers.new(name="qcut", type='BOOLEAN')
-        m.operation = 'INTERSECT'
-        m.solver = 'EXACT'
-        m.object = cutter
-        bpy.ops.object.select_all(action='DESELECT')
-        wedge.select_set(True)
-        bpy.context.view_layer.objects.active = wedge
-        bpy.ops.object.modifier_apply(modifier=m.name)
-        _assign(wedge, mat)
-        wedge.name = f"Conjure_Q{{bi}}_{{qi}}"
-        outputs.append(wedge)
-    bpy.data.objects.remove(band, do_unlink=True)
+for qi, cutter in enumerate(cutters):
+    wedge = _dup(src)
+    m = wedge.modifiers.new(name="qcut", type='BOOLEAN')
+    m.operation = 'INTERSECT'
+    m.solver = 'EXACT'
+    m.object = cutter
+    bpy.ops.object.select_all(action='DESELECT')
+    wedge.select_set(True)
+    bpy.context.view_layer.objects.active = wedge
+    bpy.ops.object.modifier_apply(modifier=m.name)
+    wedge.name = f"Conjure_Q{{qi}}"
+    outputs.append(wedge)
 
 for c in cutters:
     bpy.data.objects.remove(c, do_unlink=True)
@@ -209,7 +195,7 @@ bpy.data.objects.remove(src, do_unlink=True)
 
 print(json.dumps({{
     "skipped": False, "mode": "quarter", "objects": len(outputs),
-    "bands": 2, "wedges_per_band": 4,
+    "wedges": 4,
 }}))
 """
 

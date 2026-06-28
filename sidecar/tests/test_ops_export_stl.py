@@ -31,10 +31,12 @@ def test_color_token_canonical_map():
     # zebra groups.
     assert export_stl.color_token("Conjure_ColorA", "zebra") == "red"
     assert export_stl.color_token("Conjure_ColorB", "zebra") == "yellow"
-    # quarter wedges: band 0 = red, band 1 = yellow.
-    assert export_stl.color_token("Conjure_Q0_0", "quarter") == "red-q0"
-    assert export_stl.color_token("Conjure_Q0_3", "quarter") == "red-q3"
-    assert export_stl.color_token("Conjure_Q1_2", "quarter") == "yellow-q2"
+    # quarter wedges: Conjure_Q{i} → "q{i}" (no colour prefix; all same filament).
+    assert export_stl.color_token("Conjure_Q0", "quarter") == "q0"
+    assert export_stl.color_token("Conjure_Q1", "quarter") == "q1"
+    assert export_stl.color_token("Conjure_Q3", "quarter") == "q3"
+    # old two-index names no longer match (regression guard).
+    assert export_stl.color_token("Conjure_Q0_0", "quarter") == ""
     # unrecognised name under a split mode falls back to bare stem.
     assert export_stl.color_token("Cube", "zebra") == ""
 
@@ -68,7 +70,7 @@ def test_none_mode_code_pins_binary_mm_axes_and_returns_stats():
     assert "export_mesh.stl" not in code
     # Embedded color_token must still carry the canonical patterns.
     assert "Conjure_ColorA" in code and "Conjure_ColorB" in code
-    assert r"Conjure_Q(\d+)_(\d+)$" in code
+    assert r"Conjure_Q(\d+)$" in code
     assert captured["timeout"] == HEAVY_TIMEOUT
     assert out["count"] == 1 and out["mode"] == "none"
 
@@ -105,21 +107,23 @@ def test_zebra_two_files_red_yellow():
     assert {f["color"] for f in out["files"]} == {"red", "yellow"}
 
 
-def test_quarter_eight_files():
-    files = [{"path": f"d/v_ts_{c}-q{q}.stl", "color": f"{c}-q{q}", "size": 80}
-             for c in ("red", "yellow") for q in range(4)]
-    payload = {"mode": "quarter", "dir": "d", "count": 8, "files": files}
+def test_quarter_four_files():
+    """Quarter produces 4 STL files (q0–q3), one per wedge, same colour."""
+    files = [{"path": f"d/v_ts_q{q}.stl", "color": f"q{q}", "size": 80}
+             for q in range(4)]
+    payload = {"mode": "quarter", "dir": "d", "count": 4, "files": files}
     import json as _j
     with patch("ops.export_stl.execute_blender_code",
                return_value=_j.dumps(payload)):
         out = export_stl.run("d", "v", "ts", "quarter")
-    assert out["count"] == 8 and len(out["files"]) == 8
+    assert out["count"] == 4 and len(out["files"]) == 4
+    assert {f["color"] for f in out["files"]} == {"q0", "q1", "q2", "q3"}
 
 
 def test_count_mismatch_raises_legibly():
     with patch("ops.export_stl.execute_blender_code",
-               return_value='{"mode": "quarter", "count": 7, "files": []}'):
-        with pytest.raises(RuntimeError, match="expected 8 STL file.*got 7"):
+               return_value='{"mode": "quarter", "count": 3, "files": []}'):
+        with pytest.raises(RuntimeError, match="expected 4 STL file.*got 3"):
             export_stl.run("d", "v", "ts", "quarter")
 
 
@@ -183,13 +187,11 @@ def test_live_zebra_writes_two_binary_stls(tmp_path):
 
 
 @pytest.mark.skipif(not _port_open(), reason=_LIVE_REASON)
-def test_live_quarter_writes_eight_binary_stls(tmp_path):
+def test_live_quarter_writes_four_binary_stls(tmp_path):
     _prep_vase()
     color_split.run("quarter")
     out = export_stl.run(str(tmp_path), "vase", "20260516-105400", "quarter")
-    assert out["count"] == 8
-    assert {f["color"] for f in out["files"]} == {
-        f"{c}-q{q}" for c in ("red", "yellow") for q in range(4)
-    }
+    assert out["count"] == 4
+    assert {f["color"] for f in out["files"]} == {f"q{q}" for q in range(4)}
     for f in out["files"]:
         _assert_binary_nonempty(f["path"])

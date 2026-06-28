@@ -100,7 +100,7 @@ export function Export() {
     const recipeText = recipe(objectType, longestMm);
 
     const expectedCount =
-        colorSplitMode === "none" ? 1 : colorSplitMode === "zebra" ? 2 : 8;
+        colorSplitMode === "none" ? 1 : colorSplitMode === "zebra" ? 2 : 4;
 
     async function doExport3mf(): Promise<string | null> {
         const r = await invokeSidecar<ThreemfResult>("export.threemf", {
@@ -352,7 +352,7 @@ export function Export() {
                 >
                     Copy recipe
                 </button>
-                {colorSplitMode !== "none" && (
+                {colorSplitMode === "zebra" && (
                     <p style={{ fontSize: "0.78rem", color: "#aaa" }}>
                         Multi-color: assign a filament to each STL object in Bambu
                         Studio. Don’t enable spiral vase mode for split parts.

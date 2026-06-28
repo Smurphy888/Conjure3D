@@ -6,13 +6,12 @@ mesh object, named per the file-stem convention:
 
   none mode    : ``<slug>_<ts>.stl``                          (1 file)
   zebra mode   : ``<slug>_<ts>_red.stl``, ``..._yellow.stl``  (2 files)
-  quarter mode : ``<slug>_<ts>_red-q0.stl`` … ``_yellow-q3``  (8 files)
+  quarter mode : ``<slug>_<ts>_q0.stl`` … ``_q3.stl``         (4 files)
 
 Color tokens are derived from the object names ``color_split`` assigns
-(``Conjure_ColorA`` / ``Conjure_ColorB`` for zebra; ``Conjure_Q{band}_{wedge}``
-for quarter). Band 0 = red, band 1 = yellow — matching ``color_split``'s
-``MAT_RED`` / ``MAT_YELLOW`` band-assignment order. ``none`` mode exports the
-single mesh under the bare stem with no color suffix regardless of its name.
+(``Conjure_ColorA`` / ``Conjure_ColorB`` for zebra; ``Conjure_Q{wedge}``
+for quarter). ``none`` mode exports the single mesh under the bare stem with
+no color suffix regardless of its name.
 
 Blender 4.2+ uses the core ``bpy.ops.wm.stl_export`` (the legacy add-on
 ``bpy.ops.export_mesh.stl`` is deprecated and uses different kwarg names —
@@ -47,10 +46,10 @@ GLOBAL_SCALE_MM = 1000.0
 
 # How many STL files each mode must produce. Used to fail the live run
 # legibly if Blender hands back the wrong object set.
-EXPECTED_COUNT = {NONE: 1, ZEBRA: 2, QUARTER: 8}
+EXPECTED_COUNT = {NONE: 1, ZEBRA: 2, QUARTER: 4}
 
 
-_QUARTER_RE = re.compile(r"Conjure_Q(\d+)_(\d+)$")
+_QUARTER_RE = re.compile(r"Conjure_Q(\d+)$")
 
 
 def color_token(name: str, mode: str) -> str:
@@ -66,8 +65,8 @@ def color_token(name: str, mode: str) -> str:
         return ""
     m = _QUARTER_RE.match(name)
     if m:
-        band, wedge = int(m.group(1)), int(m.group(2))
-        return ("red" if band == 0 else "yellow") + "-q" + str(wedge)
+        qi = int(m.group(1))
+        return "q" + str(qi)
     if name.startswith("Conjure_ColorA"):
         return "red"
     if name.startswith("Conjure_ColorB"):
@@ -133,10 +132,10 @@ MODE = {json.dumps(mode)}
 def color_token(name):
     if MODE == "none":
         return ""
-    m = re.match(r"Conjure_Q(\\d+)_(\\d+)$", name)
+    m = re.match(r"Conjure_Q(\\d+)$", name)
     if m:
-        band, wedge = int(m.group(1)), int(m.group(2))
-        return ("red" if band == 0 else "yellow") + "-q" + str(wedge)
+        qi = int(m.group(1))
+        return "q" + str(qi)
     if name.startswith("Conjure_ColorA"):
         return "red"
     if name.startswith("Conjure_ColorB"):

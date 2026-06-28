@@ -84,9 +84,10 @@ def build_recipe(
         )
 
     # Filament setup. Each "active" filament slot needs one entry in
-    # filament_settings_id + filament_colour. zebra/quarter both use 2
-    # filaments (red + yellow); none uses 1.
-    if color_split_mode in ("zebra", "quarter"):
+    # filament_settings_id + filament_colour. zebra uses 2 filaments
+    # (red + yellow); none and quarter use 1 (quarter is a pure geometric
+    # split with no colour change).
+    if color_split_mode == "zebra":
         filament_settings = [FILAMENT_BAMBU_PLA, FILAMENT_BAMBU_PLA]
         filament_colours = [COLOR_RED_HEX, COLOR_YELLOW_HEX]
     else:

@@ -34,18 +34,18 @@ from recipe import build_recipe, filament_index_for_color
 
 GLOBAL_SCALE_MM = 1000.0  # Blender unit → mm; matches export_stl.py
 
-_QUARTER_RE = re.compile(r"Conjure_Q(\d+)_(\d+)$")
+_QUARTER_RE = re.compile(r"Conjure_Q(\d+)$")
 
 
 def _color_token(name: str, mode: str) -> str:
-    """Same mapping as ops/export_stl.py.color_token — copied here
-    rather than imported so the two stay parallel."""
+    """Map object name → filament color token.
+    Quarter objects (Conjure_Q{i}) all share filament 1 — quarter is a pure
+    geometric split with no colour change. Zebra objects use red/yellow.
+    """
     if mode == "none":
         return ""
-    m = _QUARTER_RE.match(name)
-    if m:
-        band = int(m.group(1))
-        return "red" if band == 0 else "yellow"
+    if _QUARTER_RE.match(name):
+        return ""  # all wedges → filament 1 (same colour)
     if name.startswith("Conjure_ColorA"):
         return "red"
     if name.startswith("Conjure_ColorB"):

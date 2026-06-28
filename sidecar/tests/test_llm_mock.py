@@ -133,7 +133,7 @@ def test_color_keyword_appends_zebra_split():
 
 
 def test_quarter_keyword_picks_quarter_mode():
-    chain = llm.generate_edit_chain("8 wedges in two colors")
+    chain = llm.generate_edit_chain("split into quarters")
     cs = chain.edits[-1]
     assert cs.type == "color_split"
     assert cs.mode == "quarter"
