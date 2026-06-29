@@ -180,6 +180,52 @@ def test_single_color_phrases_suppress_color_split(prompt):
     )
 
 
+# ── Bisect routing (physical cut into two pieces) ────────────────────────────
+
+
+def test_bisect_keyword_appends_bisect_and_suppresses_color_split():
+    chain = llm.generate_edit_chain("split the character in half horizontally")
+    t = _types(chain)
+    assert t[-1] == "bisect"
+    assert "color_split" not in t
+    assert chain.edits[-1].axis == "z"
+
+
+def test_bisect_chain_validates_through_schema():
+    chain = llm.generate_edit_chain("cut it in half")
+    validate_chain({"edits": chain.to_orchestrator_input()})
+
+
+@pytest.mark.parametrize(
+    "prompt,axis",
+    [
+        ("cut in half", "z"),
+        ("slice it in half horizontally", "z"),
+        ("split it in half vertically", "x"),
+        ("halve it left and right", "x"),
+        ("separate into two pieces", "z"),
+    ],
+)
+def test_bisect_axis_detection(prompt, axis):
+    chain = llm.generate_edit_chain(prompt)
+    b = next(e for e in chain.edits if e.type == "bisect")
+    assert b.axis == axis
+
+
+def test_color_request_routes_to_color_split_not_bisect():
+    chain = llm.generate_edit_chain("split into 2 colors")
+    t = _types(chain)
+    assert "color_split" in t
+    assert "bisect" not in t
+
+
+def test_plain_request_has_neither_split():
+    chain = llm.generate_edit_chain("just make it 60mm tall")
+    t = _types(chain)
+    assert "bisect" not in t
+    assert "color_split" not in t
+
+
 # ── Style / detail routing ──────────────────────────────────────────────────
 
 

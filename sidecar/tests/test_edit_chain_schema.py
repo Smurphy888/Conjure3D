@@ -202,6 +202,26 @@ def test_color_split_count_must_be_int():
         )
 
 
+# ── Bisect ────────────────────────────────────────────────────────────────────
+
+
+def test_bisect_parses_and_defaults_axis_z():
+    chain = validate_chain({"edits": [{"type": "bisect"}]})
+    assert chain.edits[0].type == "bisect"
+    assert chain.edits[0].axis == "z"
+
+
+@pytest.mark.parametrize("axis", ["x", "y", "z"])
+def test_bisect_accepts_valid_axes(axis):
+    chain = validate_chain({"edits": [{"type": "bisect", "axis": axis}]})
+    assert chain.edits[0].axis == axis
+
+
+def test_bisect_rejects_bad_axis():
+    with pytest.raises(ValidationError):
+        validate_chain({"edits": [{"type": "bisect", "axis": "w"}]})
+
+
 # ── Canonical order export ───────────────────────────────────────────────────
 
 

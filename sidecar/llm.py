@@ -40,6 +40,7 @@ import re
 from typing import Protocol
 
 from edit_chain_schema import (
+    Bisect,
     BridgeTopLoops,
     ColorSplit,
     Decimate,
@@ -109,6 +110,16 @@ _SINGLE_COLOR_KEYWORDS = (
     "single filament", "no split",
     "1 color", "1 colour",
 )
+# Physical cut into two pieces (NOT colour). Strong, specific phrases only so
+# we don't fire on a bare "split" that meant a colour split.
+_BISECT_KEYWORDS = (
+    "in half", "in two", "in 2", "bisect", "halve", "halved",
+    "two pieces", "2 pieces", "two halves", "2 halves",
+    "cut in half", "separate pieces", "split it in",
+)
+# Words that mean a vertical cut plane (left/right) rather than the default
+# horizontal (top/bottom) one.
+_BISECT_VERTICAL_KEYWORDS = ("vertical", "left and right", "left/right", "side to side", "side-to-side")
 _FLAT_BOTTOM_KEYWORDS = ("flat bottom", "flat base", "stable", "sit flat", "flatten the base")
 _LIGHT_KEYWORDS = ("light", "lighter", "less detail", "low poly", "simpler", "lower poly")
 _DETAIL_KEYWORDS = ("detail", "detailed", "preserve", "high poly", "fine")
@@ -194,10 +205,15 @@ class MockBackend:
         # "single color" / "solid color" / etc. don't false-positive on the
         # bare "color" needle in _COLOR_SPLIT_KEYWORDS.
         no_color_split = _matches_any(text, _SINGLE_COLOR_KEYWORDS)
-        wants_color = (not no_color_split) and (
+        # A physical bisect ("cut in half") is mutually exclusive with a colour
+        # split — combining them would feed color_split two objects. Bisect wins
+        # when explicitly requested, since its phrases are specific.
+        wants_bisect = _matches_any(text, _BISECT_KEYWORDS)
+        bisect_axis = "x" if _matches_any(text, _BISECT_VERTICAL_KEYWORDS) else "z"
+        wants_color = (not wants_bisect) and (not no_color_split) and (
             _matches_any(text, _COLOR_SPLIT_KEYWORDS) or _matches_any(text, _QUARTER_KEYWORDS)
         )
-        wants_quarter = (not no_color_split) and _matches_any(text, _QUARTER_KEYWORDS)
+        wants_quarter = wants_color and _matches_any(text, _QUARTER_KEYWORDS)
 
         # Solid / flat_part want a flat base by default; vases don't
         # (open_top + bridge handle the top, and a vase usually sits
@@ -231,6 +247,12 @@ class MockBackend:
             mode = "quarter" if wants_quarter else "zebra"
             count = _detect_color_split_count(text, default=8)
             edits.append(ColorSplit(type="color_split", mode=mode, count=count))
+
+        # Physical bisect into two pieces — runs after color_split in canonical
+        # order, but the two are mutually exclusive here (wants_color is forced
+        # off when wants_bisect).
+        if wants_bisect:
+            edits.append(Bisect(type="bisect", axis=bisect_axis))
 
         return EditChain(edits=edits)
 

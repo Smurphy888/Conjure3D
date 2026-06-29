@@ -48,6 +48,7 @@ from ops import (
     decimate,
     vase_top,
     color_split,
+    bisect,
 )
 
 # Lower rank runs first. Unknown types sort last (and are reported).
@@ -62,6 +63,7 @@ CANONICAL_ORDER = {
     "open_top": 8,
     "bridge_top_loops": 9,
     "color_split": 10,
+    "bisect": 11,
 }
 
 _FAILED_SANITY = {
@@ -95,6 +97,8 @@ def _run_edit(edit: dict, object_type: str):
         return vase_top.bridge_top_loops(object_type)
     if t == "color_split":
         return color_split.run(edit["mode"], int(edit.get("count", 8)))
+    if t == "bisect":
+        return bisect.run(edit.get("axis", "z"))
     raise KeyError(f"unknown edit type: {t!r}")
 
 
@@ -114,6 +118,7 @@ def apply_chain(params: dict) -> dict:
         else "solid_decorative"
     )
     color_split_in_chain = any(e.get("type") == "color_split" for e in edits)
+    bisect_in_chain = any(e.get("type") == "bisect" for e in edits)
 
     errors: list[str] = []
 
@@ -159,8 +164,14 @@ def apply_chain(params: dict) -> dict:
                     "manifold": (
                         s["boundary_edges"] == 0 and s["non_manifold_edges"] == 0
                     ) or color_split_in_chain,
-                    # color_split intentionally produces multiple components.
-                    "single_component": s["components"] == 1 or color_split_in_chain,
+                    # color_split AND bisect intentionally produce multiple
+                    # components (coloured groups / two cut pieces). manifold is
+                    # NOT relaxed for bisect: a correct cap leaves zero boundary
+                    # edges, so a red manifold flag is the live signal that the
+                    # fill_holes cap failed — masking it would hide a real defect.
+                    "single_component": (
+                        s["components"] == 1 or color_split_in_chain or bisect_in_chain
+                    ),
                     "normals_outward": s["signed_volume"] > 0,
                     "longest_dim_under_limit": (
                         max(s["dims_mm"]) <= sanity_op.LONGEST_DIM_LIMIT_MM

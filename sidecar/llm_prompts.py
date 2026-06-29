@@ -95,6 +95,14 @@ _EDIT_CATALOGUE: list[tuple[str, str, str]] = [
         '"quarter" = 4 geometric wedges (same filament), "none" = no split',
         '{"type":"color_split","mode":"zebra"|"quarter"|"none","count":<int 2–32, default 8>}',
     ),
+    (
+        "bisect",
+        "physically CUT the model into two separate watertight pieces with one "
+        'plane: "z" = horizontal cut (top/bottom halves), "x"/"y" = vertical. '
+        "Use this for “cut/split in half”, “two pieces”, “separate halves”. "
+        "Not for colour — that's color_split.",
+        '{"type":"bisect","axis":"z"|"x"|"y"}',
+    ),
 ]
 
 

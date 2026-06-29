@@ -54,6 +54,7 @@ CANONICAL_ORDER: tuple[str, ...] = (
     "open_top",
     "bridge_top_loops",
     "color_split",
+    "bisect",
 )
 
 
@@ -132,6 +133,18 @@ class ColorSplit(_EditBase):
     count: int = Field(default=8, ge=2, le=32)
 
 
+class Bisect(_EditBase):
+    """Physically cut the mesh into TWO separate, watertight pieces with a
+    single plane at the midpoint of the chosen axis. ``axis='z'`` (default)
+    is a horizontal cut (top + bottom halves); 'x'/'y' are vertical cuts.
+    Unlike color_split this separates geometry rather than assigning filaments;
+    like color_split it intentionally yields multiple components (the
+    orchestrator relaxes single_component when a bisect is present)."""
+
+    type: Literal["bisect"]
+    axis: Literal["x", "y", "z"] = "z"
+
+
 # ── Discriminated union ──────────────────────────────────────────────────────
 # Pydantic picks the right class based on the ``type`` field. The Annotated
 # wrapper with Field(discriminator='type') is the v2 idiom that lets pydantic
@@ -150,6 +163,7 @@ Edit = Annotated[
         OpenTop,
         BridgeTopLoops,
         ColorSplit,
+        Bisect,
     ],
     Field(discriminator="type"),
 ]

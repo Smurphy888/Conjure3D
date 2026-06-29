@@ -114,6 +114,12 @@ const OP_SPECS: readonly OpSpec[] = [
         ],
         defaults: { type: "color_split", mode: "zebra", count: 8 },
     },
+    {
+        type: "bisect",
+        label: "Cut in half (two pieces)",
+        fields: [{ key: "axis", label: "Cut plane (z=horizontal)", options: ["z", "x", "y"] }],
+        defaults: { type: "bisect", axis: "z" },
+    },
 ];
 
 function specFor(type: string): OpSpec | undefined {

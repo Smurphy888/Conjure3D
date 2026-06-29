@@ -27,6 +27,7 @@ edit ::= edit-scale
        | edit-open-top
        | edit-bridge
        | edit-color-split
+       | edit-bisect
 
 # Each rule pins the discriminator string AND the field set the
 # corresponding Pydantic class accepts. Optional fields are guarded with
@@ -60,6 +61,11 @@ edit-color-split ::= "{" ws "\"type\"" ws ":" ws "\"color_split\"" ws "," ws
                       (ws "," ws "\"count\"" ws ":" ws integer)? ws "}"
 
 color-split-mode ::= "\"none\"" | "\"zebra\"" | "\"quarter\""
+
+edit-bisect ::= "{" ws "\"type\"" ws ":" ws "\"bisect\""
+                 (ws "," ws "\"axis\"" ws ":" ws bisect-axis)? ws "}"
+
+bisect-axis ::= "\"x\"" | "\"y\"" | "\"z\""
 
 # Number literals. JSON allows leading minus + optional decimal + optional
 # exponent. We disallow exponent (no use case in this domain) and disallow
