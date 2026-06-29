@@ -15,6 +15,7 @@ import { PreviewPick } from "./screens/PreviewPick";
 import { Editor } from "./screens/Editor";
 import { AIEditor } from "./screens/AIEditor";
 import { Export } from "./screens/Export";
+import { Settings as SettingsScreen } from "./screens/Settings";
 
 function AppRoutes({ settings, onWizardDone }: { settings: Settings; onWizardDone: () => void }) {
     const complete = wizardComplete(settings);
@@ -36,6 +37,7 @@ function AppRoutes({ settings, onWizardDone }: { settings: Settings; onWizardDon
             <Route path="/editor" element={complete ? <AIEditor /> : <Navigate to="/wizard" replace />} />
             <Route path="/editor-manual" element={complete ? <Editor /> : <Navigate to="/wizard" replace />} />
             <Route path="/export" element={complete ? <Export /> : <Navigate to="/wizard" replace />} />
+            <Route path="/settings" element={complete ? <SettingsScreen /> : <Navigate to="/wizard" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
     );

@@ -39,6 +39,7 @@ _KEYRING_SERVICE = "conjure3d"
 _OPENROUTER_KEYRING_ACCOUNT = "openrouter_api_key"
 
 _API_URL = "https://openrouter.ai/api/v1/chat/completions"
+_VALIDATE_URL = "https://openrouter.ai/api/v1/auth/key"
 
 # Default model — a capable NON-ANTHROPIC coder, consistent with the local
 # Qwen2.5-Coder so prompt behaviour is familiar. User-overridable, except
@@ -132,6 +133,31 @@ class OpenRouterBackend:
         WITHOUT spending a token. Raises OpenRouterError if missing so the
         caller leaves the mock in place and surfaces the reason."""
         _ = self._api_key
+
+    def validate(self) -> None:
+        """LIVE key check used to GATE a provider switch — confirms OpenRouter
+        accepts the key before we make it the active backend. Free (no token
+        spend) and fast (short timeout). Distinguishes a rejected key (401/403)
+        from a network failure so the UI can show the right fix. Raises
+        OpenRouterError on any problem; returns None on success."""
+        import requests
+
+        try:
+            resp = requests.get(
+                _VALIDATE_URL, headers=self._headers(), timeout=(10, 15)
+            )
+        except requests.exceptions.RequestException as exc:
+            raise OpenRouterError(f"Couldn't reach OpenRouter: {exc}") from exc
+        if resp.status_code in (401, 403):
+            raise OpenRouterError(
+                f"OpenRouter rejected the API key (HTTP {resp.status_code}). "
+                "Make sure it's an OpenRouter key (starts with sk-or-v1-)."
+            )
+        if not resp.ok:
+            raise OpenRouterError(
+                f"OpenRouter key check failed (HTTP {resp.status_code}): "
+                f"{resp.text[:200]}"
+            )
 
     def _headers(self) -> dict:
         return {

@@ -30,10 +30,13 @@ export function Home() {
             {sidecarError && (
                 <p style={{ color: "#ff6b6b", fontSize: "0.85rem" }}>{sidecarError}</p>
             )}
-            <button className="btn-primary" onClick={() => navigate("/new-project")}>New Project</button>
+            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center" }}>
+                <button className="btn-primary" onClick={() => navigate("/new-project")}>New Project</button>
+                <button onClick={() => navigate("/settings")}>Settings</button>
+            </div>
             {provider !== null && (
                 <p style={{ fontSize: "0.82rem", color: "#aaa", marginTop: "1rem" }}>
-                    AI provider: {PROVIDER_LABELS[provider] ?? provider}{" "}
+                    3D generator: {PROVIDER_LABELS[provider] ?? provider}{" "}
                     <button
                         style={{
                             fontSize: "0.75rem",

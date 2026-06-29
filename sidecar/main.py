@@ -22,6 +22,7 @@ import slicer as _slicer  # Bambu Studio hand-off (Phase G #25)
 import project as _project  # .conjure3d.json save/load (Phase H #26)
 import llm as _llm  # NL editor (Phase J.2 — mocked backend; J.4 swaps to llama.cpp)
 import llm_openrouter as _openrouter  # Phase J.6 — cloud LLM escape hatch
+import llm_openai as _openai  # Phase J.6 — direct OpenAI cloud provider
 import llm_model_download as _model_dl  # Phase J.5 — resumable GGUF download
 from pydantic import ValidationError as _PydanticValidationError
 
@@ -340,38 +341,82 @@ def system_has_openrouter_key(_params):
     return {"set": _openrouter.has_openrouter_key()}
 
 
+@register("system.set_openai_key")
+def system_set_openai_key(params):
+    _openai.set_openai_key(params["key"])
+    return {"ok": True}
+
+
+@register("system.has_openai_key")
+def system_has_openai_key(_params):
+    return {"set": _openai.has_openai_key()}
+
+
+# Cloud provider id -> (backend class, default model). Local is handled
+# separately (no key, no validation).
+_CLOUD_PROVIDERS = {
+    "openrouter": (_openrouter.OpenRouterBackend, _openrouter.DEFAULT_MODEL),
+    "openai": (_openai.OpenAIBackend, _openai.DEFAULT_MODEL),
+}
+
+
 @register("llm.get_provider")
 def llm_get_provider(_params):
     s = read_settings()
+    provider = s.get("llm_provider", "local")
+    default_model = _CLOUD_PROVIDERS.get(provider, (None, None))[1]
     return {
-        "provider": s.get("llm_provider", "local"),
-        "model": s.get("llm_model") or _openrouter.DEFAULT_MODEL,
+        "provider": provider,
+        "model": s.get("llm_model") or default_model,
+        "has_openrouter_key": _openrouter.has_openrouter_key(),
+        "has_openai_key": _openai.has_openai_key(),
     }
 
 
 @register("llm.set_provider")
 def llm_set_provider(params):
-    """Switch the active LLM provider and re-select the backend LIVE (no
-    restart). provider: "local" | "openrouter". For openrouter an optional
-    model id may be supplied (non-Anthropic; the backend rejects anthropic/*).
-    Returns the resulting backend_info-style status."""
+    """Switch the active LLM provider, VALIDATING a cloud key live before the
+    swap so a bad key fails immediately instead of silently leaving the app in
+    a broken state with no recovery UI. provider: "local"|"openrouter"|"openai".
+
+    On a cloud switch we build the backend, call validate() (a free auth check),
+    and ONLY set it active + persist if it passes. On failure we keep the
+    current backend and return {ok: False, message}. The frontend shows that
+    message inline. "local" never validates (no key)."""
     provider = params["provider"]
-    if provider not in ("local", "openrouter"):
+    if provider not in ("local", *_CLOUD_PROVIDERS):
         raise ValueError(f"Unknown llm provider: {provider!r}")
+    model = params.get("model") or None
+
+    if provider == "local":
+        settings = read_settings()
+        settings["llm_provider"] = "local"
+        settings["llm_model"] = None
+        write_settings(settings)
+        _select_llm_backend(settings)
+        name = _llm.backend_name()
+        return {"ok": True, "backend": name, "degraded": name in _MOCK_BACKEND_NAMES, "provider": "local"}
+
+    backend_cls = _CLOUD_PROVIDERS[provider][0]
+    try:
+        backend = backend_cls(model=model)
+        backend.validate()  # GATE: live auth check before we switch
+    except Exception as exc:  # noqa: BLE001 — structured error, never raise across RPC
+        current = _llm.backend_name()
+        return {
+            "ok": False,
+            "message": str(exc),
+            "provider_attempted": provider,
+            "degraded": current in _MOCK_BACKEND_NAMES,
+        }
+
+    _llm.set_backend(backend)
     settings = read_settings()
     settings["llm_provider"] = provider
-    if "model" in params:
-        settings["llm_model"] = params["model"] or None
+    settings["llm_model"] = model
     write_settings(settings)
-    status = _select_llm_backend(settings)
-    backend = _llm.backend_name()
-    return {
-        "ok": True,
-        "backend": backend,
-        "degraded": backend in _MOCK_BACKEND_NAMES,
-        "provider": provider,
-        "status": status,
-    }
+    name = _llm.backend_name()
+    return {"ok": True, "backend": name, "degraded": False, "provider": provider}
 
 
 @register("llm.model_status")
@@ -542,16 +587,15 @@ def _select_llm_backend(settings: dict) -> str:
     Returns a short status string (logged to stderr)."""
     provider = settings.get("llm_provider", "local")
 
-    if provider == "openrouter":
-        if not _openrouter.has_openrouter_key():
-            return "openrouter_no_key"
+    if provider in _CLOUD_PROVIDERS:
+        backend_cls = _CLOUD_PROVIDERS[provider][0]
         try:
-            backend = _openrouter.OpenRouterBackend(model=settings.get("llm_model"))
-            backend.warm_up()  # key-presence check, no token spend
+            backend = backend_cls(model=settings.get("llm_model"))
+            backend.warm_up()  # key-presence check only (no network at startup)
             _llm.set_backend(backend)
-            return f"openrouter ({backend.model})"
+            return f"{provider} ({backend.model})"
         except Exception as exc:  # noqa: BLE001 — leave mock in place on any error
-            return f"openrouter_failed: {exc}"
+            return f"{provider}_unavailable: {exc}"
 
     # Local path — try the bundled llama.cpp (J.4). The mock is the fallback.
     return _llm.try_install_llama_backend()

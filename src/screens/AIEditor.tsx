@@ -240,16 +240,13 @@ export function AIEditor() {
     const [currentGlbPath, setCurrentGlbPath] = useState(selectedGlbPath);
     const [applyVersion, setApplyVersion] = useState(0);
 
-    // Cloud-AI (OpenRouter) switch — surfaced inside the degraded banner so
-    // the user can escape basic keyword mode where they hit the problem.
-    const [showCloud, setShowCloud] = useState(false);
-    const [orKey, setOrKey] = useState("");
-    const [orModel, setOrModel] = useState("");
-    const [orSaving, setOrSaving] = useState(false);
-    const [orError, setOrError] = useState<string | null>(null);
-
-    function refreshBackend() {
-        return invokeSidecar<BackendInfo>("llm.backend_info")
+    // Show the mode badge so the user knows whether they're on the keyword
+    // mock, the local model, or cloud AI. Provider setup / key entry lives on
+    // the Settings screen (reachable from Home AND the banner link below) —
+    // not inline here, so it stays reachable even after a switch leaves the
+    // editor non-degraded.
+    useEffect(() => {
+        invokeSidecar<BackendInfo>("llm.backend_info")
             .then((r) => setBackend(describeBackend(r.backend, r.install_status, r.degraded)))
             .catch(() =>
                 setBackend({
@@ -260,40 +257,7 @@ export function AIEditor() {
                         "edit plan by hand using the “+ Add op” menu.",
                 })
             );
-    }
-
-    // Show the mode badge so the user knows whether they're on the keyword
-    // mock, the local model, or cloud AI.
-    useEffect(() => {
-        refreshBackend();
     }, []);
-
-    async function switchToOpenRouter() {
-        if (!orKey.trim()) return;
-        setOrSaving(true);
-        setOrError(null);
-        try {
-            await invokeSidecar("system.set_openrouter_key", { key: orKey.trim() });
-            const res = await invokeSidecar<{ degraded: boolean }>("llm.set_provider", {
-                provider: "openrouter",
-                ...(orModel.trim() ? { model: orModel.trim() } : {}),
-            });
-            await refreshBackend();
-            if (res.degraded) {
-                setOrError(
-                    "Switched, but the backend is still in basic mode — the key " +
-                        "may not have been accepted. Double-check it."
-                );
-            } else {
-                setShowCloud(false);
-                setOrKey("");
-            }
-        } catch (e) {
-            setOrError(`Couldn't switch to cloud AI: ${String(e)}`);
-        } finally {
-            setOrSaving(false);
-        }
-    }
 
     async function handleGenerate() {
         setGenerating(true);
@@ -436,58 +400,9 @@ export function AIEditor() {
                         {backend.message}
                     </span>
                     <div style={{ marginTop: "0.6rem" }}>
-                        {!showCloud ? (
-                            <button onClick={() => setShowCloud(true)}>
-                                Use cloud AI (OpenRouter)…
-                            </button>
-                        ) : (
-                            <div
-                                style={{
-                                    display: "grid",
-                                    gap: "0.4rem",
-                                    maxWidth: 460,
-                                    padding: "0.6rem",
-                                    border: "1px solid var(--border)",
-                                    borderRadius: "var(--radius-sm)",
-                                    background: "var(--surface)",
-                                }}
-                            >
-                                <span style={{ color: "var(--text-muted)" }}>
-                                    Paste an OpenRouter API key. Stored in Windows Credential
-                                    Manager, never logged. Cloud AI understands free-form
-                                    requests this CPU can't run locally.
-                                </span>
-                                <input
-                                    type="password"
-                                    placeholder="OpenRouter API key (sk-or-…)"
-                                    value={orKey}
-                                    onChange={(e) => setOrKey(e.target.value)}
-                                    disabled={orSaving}
-                                />
-                                <input
-                                    type="text"
-                                    placeholder="Model (optional) — default qwen/qwen-2.5-coder-32b-instruct"
-                                    value={orModel}
-                                    onChange={(e) => setOrModel(e.target.value)}
-                                    disabled={orSaving}
-                                />
-                                <div style={{ display: "flex", gap: "0.5rem" }}>
-                                    <button
-                                        className="btn-primary"
-                                        onClick={switchToOpenRouter}
-                                        disabled={orSaving || !orKey.trim()}
-                                    >
-                                        {orSaving ? "Switching…" : "Save & switch to cloud"}
-                                    </button>
-                                    <button onClick={() => setShowCloud(false)} disabled={orSaving}>
-                                        Cancel
-                                    </button>
-                                </div>
-                                {orError && (
-                                    <span style={{ color: "var(--danger)" }}>{orError}</span>
-                                )}
-                            </div>
-                        )}
+                        <button onClick={() => navigate("/settings")}>
+                            Set up cloud AI in Settings…
+                        </button>
                     </div>
                 </div>
             )}
