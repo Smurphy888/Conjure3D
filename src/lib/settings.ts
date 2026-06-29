@@ -13,6 +13,11 @@ export interface Settings {
     wizard: WizardState;
     bambu_path: string | null;
     generation_provider?: "meshy" | "tripo";
+    /** Which backend generates edit chains in the AI Editor. Distinct from
+     *  generation_provider (which makes the 3D model). Optional for
+     *  backward-compat with settings files written before this field. */
+    llm_provider?: "local" | "openrouter";
+    llm_model?: string | null;
 }
 
 const DEFAULT_WIZARD: WizardState = {

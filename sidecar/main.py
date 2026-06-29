@@ -21,12 +21,16 @@ import orchestrator as _orchestrator  # real ops chain (Phase E #22)
 import slicer as _slicer  # Bambu Studio hand-off (Phase G #25)
 import project as _project  # .conjure3d.json save/load (Phase H #26)
 import llm as _llm  # NL editor (Phase J.2 — mocked backend; J.4 swaps to llama.cpp)
+import llm_openrouter as _openrouter  # Phase J.6 — cloud LLM escape hatch
 import llm_model_download as _model_dl  # Phase J.5 — resumable GGUF download
 from pydantic import ValidationError as _PydanticValidationError
 
 _KEYRING_SERVICE = "conjure3d"
 _KEYRING_ACCOUNT = "meshy_api_key"
 _TRIPO_KEYRING_ACCOUNT = "tripo_api_key"
+# Mock backend names — used to decide whether the AI Editor is "degraded"
+# (talking to the keyword router instead of a real model).
+_MOCK_BACKEND_NAMES = ("mock-keyword-router", "MockBackend")
 
 COMMANDS = {}
 
@@ -309,10 +313,64 @@ def llm_backend_info(_params):
     install_status surfaces *why* we're on the mock, so the AI Editor
     can tell the user "model not downloaded yet" vs "library missing"
     vs "model failed to load" without us having to add a separate
-    diagnostic endpoint."""
+    diagnostic endpoint.
+
+    `degraded` is the SERVER's verdict on whether the user is talking to a
+    real model — true only when the active backend is the keyword mock. The
+    UI must key its "basic mode" banner off this, NOT off install_status:
+    once a cloud backend is swapped in, install_status still carries the
+    stale local-load reason (e.g. "load_failed"), but degraded is false."""
+    backend = _llm.backend_name()
     return {
-        "backend": _llm.backend_name(),
+        "backend": backend,
         "install_status": _llm.install_status(),
+        "degraded": backend in _MOCK_BACKEND_NAMES,
+        "provider": read_settings().get("llm_provider", "local"),
+    }
+
+
+@register("system.set_openrouter_key")
+def system_set_openrouter_key(params):
+    _openrouter.set_openrouter_key(params["key"])
+    return {"ok": True}
+
+
+@register("system.has_openrouter_key")
+def system_has_openrouter_key(_params):
+    return {"set": _openrouter.has_openrouter_key()}
+
+
+@register("llm.get_provider")
+def llm_get_provider(_params):
+    s = read_settings()
+    return {
+        "provider": s.get("llm_provider", "local"),
+        "model": s.get("llm_model") or _openrouter.DEFAULT_MODEL,
+    }
+
+
+@register("llm.set_provider")
+def llm_set_provider(params):
+    """Switch the active LLM provider and re-select the backend LIVE (no
+    restart). provider: "local" | "openrouter". For openrouter an optional
+    model id may be supplied (non-Anthropic; the backend rejects anthropic/*).
+    Returns the resulting backend_info-style status."""
+    provider = params["provider"]
+    if provider not in ("local", "openrouter"):
+        raise ValueError(f"Unknown llm provider: {provider!r}")
+    settings = read_settings()
+    settings["llm_provider"] = provider
+    if "model" in params:
+        settings["llm_model"] = params["model"] or None
+    write_settings(settings)
+    status = _select_llm_backend(settings)
+    backend = _llm.backend_name()
+    return {
+        "ok": True,
+        "backend": backend,
+        "degraded": backend in _MOCK_BACKEND_NAMES,
+        "provider": provider,
+        "status": status,
     }
 
 
@@ -472,17 +530,43 @@ def run_loop(stdin=None, stdout=None):
             print(json.dumps(response), file=stdout, flush=True)
 
 
+def _select_llm_backend(settings: dict) -> str:
+    """Pick the AI-Editor backend from settings. Always safe; never raises.
+
+    - "openrouter": swap in OpenRouterBackend if a key is present (skips the
+      local llama probe entirely — pointless, and on some CPUs it crashes).
+      Without a key, stays on the mock and reports "openrouter_no_key".
+    - "local" (default): attempt the bundled llama.cpp; on any failure the
+      mock stays in place and llm.install_status carries the reason.
+
+    Returns a short status string (logged to stderr)."""
+    provider = settings.get("llm_provider", "local")
+
+    if provider == "openrouter":
+        if not _openrouter.has_openrouter_key():
+            return "openrouter_no_key"
+        try:
+            backend = _openrouter.OpenRouterBackend(model=settings.get("llm_model"))
+            backend.warm_up()  # key-presence check, no token spend
+            _llm.set_backend(backend)
+            return f"openrouter ({backend.model})"
+        except Exception as exc:  # noqa: BLE001 — leave mock in place on any error
+            return f"openrouter_failed: {exc}"
+
+    # Local path — try the bundled llama.cpp (J.4). The mock is the fallback.
+    return _llm.try_install_llama_backend()
+
+
 if __name__ == "__main__":
-    # Phase J.4: try to swap in the real llama-cpp backend before the
-    # RPC loop accepts requests. Failure (no library, no model file,
-    # load error) is silently absorbed — the AI Editor stays on the
-    # mock and surfaces the reason via llm.install_status.
+    # Choose the AI-Editor backend before the RPC loop accepts requests.
+    # Any failure is absorbed — the AI Editor stays on the keyword mock and
+    # surfaces the reason via llm.backend_info (degraded + install_status).
     try:
-        status = _llm.try_install_llama_backend()
-        print(f"[sidecar] LLM backend install: {status}", file=sys.stderr, flush=True)
+        status = _select_llm_backend(read_settings())
+        print(f"[sidecar] LLM backend select: {status}", file=sys.stderr, flush=True)
     except Exception as exc:  # noqa: BLE001 — defensive; never block startup
         print(
-            f"[sidecar] LLM backend install raised (shouldn't happen): {exc}",
+            f"[sidecar] LLM backend select raised (shouldn't happen): {exc}",
             file=sys.stderr,
             flush=True,
         )

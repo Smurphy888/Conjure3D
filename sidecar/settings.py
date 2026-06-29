@@ -16,6 +16,12 @@ DEFAULT_SETTINGS: dict = {
     },
     "bambu_path": None,
     "generation_provider": "meshy",
+    # Which backend generates edit chains in the AI Editor. "local" = bundled
+    # llama.cpp (falls back to the keyword mock if it can't load); "openrouter"
+    # = cloud. Distinct from generation_provider (Meshy/Tripo, which makes the
+    # 3D *model*). llm_model is the OpenRouter model id (non-Anthropic).
+    "llm_provider": "local",
+    "llm_model": None,
 }
 
 

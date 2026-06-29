@@ -28,16 +28,32 @@ export interface BackendStatus {
 
 const MOCK_NAMES = new Set(["mock-keyword-router", "MockBackend"]);
 
+function friendlyLabel(backend: string | undefined): string {
+    if (!backend) return "AI";
+    if (backend.startsWith("openrouter:")) return "Cloud AI (OpenRouter)";
+    if (MOCK_NAMES.has(backend)) return "Basic keyword mode";
+    return "Local AI model";
+}
+
+/**
+ * `degraded` is the SERVER's verdict (backend_info.degraded) on whether the
+ * active backend is the keyword mock. Always prefer it — string-matching
+ * install_status is wrong once a cloud backend is swapped in (install_status
+ * still carries the stale local-load reason). The `degraded` arg is optional
+ * for backward-compat with an older sidecar that didn't send it.
+ */
 export function describeBackend(
     backend: string | undefined,
-    installStatus: string | undefined
+    installStatus: string | undefined,
+    degraded?: boolean
 ): BackendStatus {
     const status = installStatus ?? "not_attempted";
     const onMock = backend ? MOCK_NAMES.has(backend) : true;
+    const isDegraded = degraded ?? onMock;
 
-    // Real model loaded and active — no notice.
-    if (status === "installed" && !onMock) {
-        return { degraded: false, label: "AI model", message: null };
+    // Real model (local or cloud) active — no notice.
+    if (!isDegraded) {
+        return { degraded: false, label: friendlyLabel(backend), message: null };
     }
 
     // Probe hasn't reported yet — stay quiet rather than flash a scary banner
