@@ -16,6 +16,7 @@ from addon import install_addon
 from connection import test_socket as _test_socket
 from bambu import detect_bambu as _detect_bambu
 import meshy as _meshy  # REAL Meshy API (Phase F accepted by user 2026-05-18; spends credits)
+import tripo as _tripo  # Tripo AI alternative (user-selectable via generation_provider)
 import orchestrator as _orchestrator  # real ops chain (Phase E #22)
 import slicer as _slicer  # Bambu Studio hand-off (Phase G #25)
 import project as _project  # .conjure3d.json save/load (Phase H #26)
@@ -25,6 +26,7 @@ from pydantic import ValidationError as _PydanticValidationError
 
 _KEYRING_SERVICE = "conjure3d"
 _KEYRING_ACCOUNT = "meshy_api_key"
+_TRIPO_KEYRING_ACCOUNT = "tripo_api_key"
 
 COMMANDS = {}
 
@@ -96,6 +98,36 @@ def system_open_url(params):
     return {"ok": True}
 
 
+@register("system.set_tripo_key")
+def system_set_tripo_key(params):
+    key = params["key"]
+    keyring.set_password(_KEYRING_SERVICE, _TRIPO_KEYRING_ACCOUNT, key)
+    return {"ok": True}
+
+
+@register("system.has_tripo_key")
+def system_has_tripo_key(_params):
+    val = keyring.get_password(_KEYRING_SERVICE, _TRIPO_KEYRING_ACCOUNT)
+    return {"set": val is not None and val != ""}
+
+
+@register("system.get_generation_provider")
+def system_get_generation_provider(_params):
+    settings = read_settings()
+    return {"provider": settings.get("generation_provider", "meshy")}
+
+
+@register("system.set_generation_provider")
+def system_set_generation_provider(params):
+    provider = params["provider"]
+    if provider not in ("meshy", "tripo"):
+        raise ValueError(f"Unknown provider: {provider!r}. Must be 'meshy' or 'tripo'.")
+    settings = read_settings()
+    settings["generation_provider"] = provider
+    write_settings(settings)
+    return {"ok": True}
+
+
 @register("meshy.generate_preview")
 def meshy_generate_preview(params):
     return _meshy.generate_preview(params)
@@ -135,6 +167,44 @@ def meshy_download_glb(params):
     base.mkdir(parents=True, exist_ok=True)
     dest = str(base / f"{slug}.glb")
     return _meshy.download_glb({"url": params["url"], "dest": dest})
+
+
+# ── Provider-neutral model.* commands ────────────────────────────────────────
+# These dispatch to the active generation_provider (meshy or tripo).
+# Generate.tsx calls model.* so the frontend never hard-codes a provider.
+
+def _active_provider() -> str:
+    return read_settings().get("generation_provider", "meshy")
+
+
+@register("model.generate_preview")
+def model_generate_preview(params):
+    if _active_provider() == "tripo":
+        return _tripo.generate_preview(params)
+    return _meshy.generate_preview(params)
+
+
+@register("model.poll_task")
+def model_poll_task(params):
+    if _active_provider() == "tripo":
+        return _tripo.poll_task(params)
+    return _meshy.poll_task(params)
+
+
+@register("model.download_glb")
+def model_download_glb(params):
+    import os
+    from pathlib import Path
+    from slugify import slugify
+
+    slug = slugify(params.get("name") or "model")
+    base = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Conjure3D" / "projects" / slug
+    base.mkdir(parents=True, exist_ok=True)
+    dest = str(base / f"{slug}.glb")
+    dl_params = {"url": params["url"], "dest": dest}
+    if _active_provider() == "tripo":
+        return _tripo.download_glb(dl_params)
+    return _meshy.download_glb(dl_params)
 
 
 @register("edit.apply_chain")

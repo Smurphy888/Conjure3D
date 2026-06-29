@@ -87,7 +87,7 @@ export function Wizard({ initialSettings, onDone }: Props) {
             {step === 1 && <Step2Addon {...stepProps} />}
             {step === 2 && <Step3Socket {...stepProps} />}
             {step === 3 && <Step4Bambu {...stepProps} />}
-            {step === 4 && <Step5Meshy {...stepProps} />}
+            {step === 4 && <Step5Meshy {...stepProps} currentProvider={settings.generation_provider ?? "meshy"} />}
             {step > 0 && (
                 <button onClick={goBack} style={{ marginTop: "1rem" }}>
                     Back

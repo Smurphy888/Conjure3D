@@ -15,6 +15,7 @@ DEFAULT_SETTINGS: dict = {
         "step_meshy": False,
     },
     "bambu_path": None,
+    "generation_provider": "meshy",
 }
 
 
