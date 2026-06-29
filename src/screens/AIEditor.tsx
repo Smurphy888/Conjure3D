@@ -212,7 +212,13 @@ export function AIEditor() {
     const gate = editChainGate(connState);
 
     const [prompt, setPrompt] = useState("");
-    const [objectType, setObjectType] = useState<ObjectType>("vase");
+    // Default to solid_decorative, NOT vase. Defaulting to vase made the
+    // chain generator append open_top + bridge_top_loops (vase-only ops) to
+    // every model — on a non-vase mesh (e.g. a character) those slice a slab
+    // off the top and leave open boundary edges, tripping manifold ✗ and
+    // single_component ✗ with no error text. This is also the sidecar's own
+    // default (generate_chain / MockBackend both default to solid_decorative).
+    const [objectType, setObjectType] = useState<ObjectType>("solid_decorative");
     const [chain, setChain] = useState<Edit[]>([]);
     const [generating, setGenerating] = useState(false);
     const [applying, setApplying] = useState(false);
