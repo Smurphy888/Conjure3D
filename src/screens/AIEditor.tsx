@@ -30,6 +30,7 @@ import { SanityPanel } from "../components/SanityPanel";
 import { invokeSidecar } from "../lib/ipc";
 import { useConnection } from "../lib/connectionContext";
 import { editChainGate } from "../lib/blenderConnection";
+import { describeBackend, type BackendStatus } from "../lib/backendStatus";
 import type { Edit, EditChainResult } from "../lib/types";
 import type { ObjectType, ColorSplitMode } from "../lib/edits";
 
@@ -43,6 +44,7 @@ interface GenerateChainResult {
 
 interface BackendInfo {
     backend: string;
+    install_status?: string;
 }
 
 // ── Op-card metadata: friendly labels + editable fields per op type ──────────
@@ -216,7 +218,11 @@ export function AIEditor() {
     const [applying, setApplying] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [hint, setHint] = useState<string | null>(null);
-    const [backendName, setBackendName] = useState<string>("loading…");
+    const [backend, setBackend] = useState<BackendStatus>({
+        degraded: false,
+        label: "Starting…",
+        message: null,
+    });
     const [currentGlbPath, setCurrentGlbPath] = useState(selectedGlbPath);
     const [applyVersion, setApplyVersion] = useState(0);
 
@@ -224,8 +230,16 @@ export function AIEditor() {
     // they're talking to the mock, local llama.cpp, or a remote API.
     useEffect(() => {
         invokeSidecar<BackendInfo>("llm.backend_info")
-            .then((r) => setBackendName(r.backend))
-            .catch(() => setBackendName("unavailable"));
+            .then((r) => setBackend(describeBackend(r.backend, r.install_status)))
+            .catch(() =>
+                setBackend({
+                    degraded: true,
+                    label: "AI unavailable",
+                    message:
+                        "Couldn't reach the AI engine. You can still build the " +
+                        "edit plan by hand using the “+ Add op” menu.",
+                })
+            );
     }, []);
 
     async function handleGenerate() {
@@ -336,8 +350,8 @@ export function AIEditor() {
         <div className="container">
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
                 <h2 style={{ margin: 0 }}>AI Editor</h2>
-                <span style={{ fontSize: "0.8rem", color: "#888" }}>
-                    Powered by: <code>{backendName}</code>{" "}
+                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                    Mode: <code>{backend.label}</code>{" "}
                     <button
                         onClick={() => navigate("/editor-manual")}
                         style={{ ...linkBtnStyle, marginLeft: "0.5rem" }}
@@ -347,6 +361,29 @@ export function AIEditor() {
                     </button>
                 </span>
             </div>
+
+            {backend.degraded && backend.message && (
+                <div
+                    role="status"
+                    style={{
+                        width: "min(1100px, 100%)",
+                        marginTop: "0.75rem",
+                        padding: "0.7rem 0.9rem",
+                        textAlign: "left",
+                        fontSize: "0.85rem",
+                        lineHeight: 1.5,
+                        color: "var(--text)",
+                        background: "rgba(245, 166, 35, 0.10)",
+                        border: "1px solid var(--warn)",
+                        borderRadius: "var(--radius)",
+                    }}
+                >
+                    <strong style={{ color: "var(--warn)" }}>Basic keyword mode</strong>
+                    <span style={{ display: "block", marginTop: "0.25rem", color: "var(--text-muted)" }}>
+                        {backend.message}
+                    </span>
+                </div>
+            )}
 
             {/*
               The global `.container > div { width: min(640px, 100%) }` rule
