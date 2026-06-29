@@ -169,18 +169,23 @@ button:focus-visible {
 }
 
 /* Primary CTA — the single emphasized action per screen (Continue, Generate,
-   Apply, Export, Start). Filled accent so it reads at a glance. */
-.btn-primary {
+   Apply, Export, Start). Filled accent so it reads at a glance.
+   NOTE: selectors are `button.btn-primary`, not bare `.btn-primary`. The base
+   rule `button:not(.link-button)` scores (0,1,1) because :not() inherits its
+   argument's class weight — a bare `.btn-primary` at (0,1,0) would LOSE the
+   cascade and render neutral. Qualifying with `button` ties the specificity
+   and wins on source order (declared later). Same logic for hover/active. */
+button.btn-primary {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-contrast);
   font-weight: 600;
 }
-.btn-primary:hover:not(:disabled) {
+button.btn-primary:hover:not(:disabled) {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
 }
-.btn-primary:active:not(:disabled) {
+button.btn-primary:active:not(:disabled) {
   background: var(--accent-active);
   border-color: var(--accent-active);
 }
