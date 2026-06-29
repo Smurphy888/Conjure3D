@@ -44,7 +44,7 @@ export function Step3Socket({ onComplete }: Props) {
                     {testing ? "Testing..." : "Test connection"}
                 </button>
                 {result?.connected && (
-                    <button onClick={() => onComplete()}>Continue</button>
+                    <button className="btn-primary" onClick={() => onComplete()}>Continue</button>
                 )}
             </div>
         </div>

@@ -20,7 +20,7 @@ export function PreviewPick() {
             {previewTaskId && <p>Task ID: {previewTaskId}</p>}
             <button onClick={() => navigate("/generate")}>Regenerate</button>
             {" "}
-            <button onClick={() => navigate("/editor")} disabled={!selectedGlbPath}>
+            <button className="btn-primary" onClick={() => navigate("/editor")} disabled={!selectedGlbPath}>
                 Accept &amp; Edit
             </button>
         </div>

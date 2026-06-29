@@ -30,7 +30,7 @@ export function Home() {
             {sidecarError && (
                 <p style={{ color: "#ff6b6b", fontSize: "0.85rem" }}>{sidecarError}</p>
             )}
-            <button onClick={() => navigate("/new-project")}>New Project</button>
+            <button className="btn-primary" onClick={() => navigate("/new-project")}>New Project</button>
             {provider !== null && (
                 <p style={{ fontSize: "0.82rem", color: "#aaa", marginTop: "1rem" }}>
                     AI provider: {PROVIDER_LABELS[provider] ?? provider}{" "}

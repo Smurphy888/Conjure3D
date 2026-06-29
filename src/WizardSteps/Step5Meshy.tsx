@@ -108,7 +108,7 @@ export function Step5Meshy({ onComplete, currentProvider = "meshy" }: Props) {
             {error && <p style={{ color: "red" }}>{error}</p>}
             <div style={{ marginTop: "0.5rem" }}>
                 {canContinue && (
-                    <button onClick={() => onComplete({ generation_provider: provider })}>
+                    <button className="btn-primary" onClick={() => onComplete({ generation_provider: provider })}>
                         Continue
                     </button>
                 )}

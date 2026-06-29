@@ -285,6 +285,7 @@ export function Export() {
             )}
 
             <button
+                className="btn-primary"
                 onClick={handleExportAndSlice}
                 disabled={busy || !editApplied || !gate.allowed}
                 style={{ marginTop: "0.75rem" }}

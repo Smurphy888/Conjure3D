@@ -39,7 +39,7 @@ export function NewProject() {
             </div>
             <button onClick={() => navigate("/")}>Back</button>
             {" "}
-            <button onClick={handleStart} disabled={!name.trim() || !prompt.trim()}>
+            <button className="btn-primary" onClick={handleStart} disabled={!name.trim() || !prompt.trim()}>
                 Start Generating
             </button>
         </div>

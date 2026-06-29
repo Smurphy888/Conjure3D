@@ -85,7 +85,7 @@ export function Step2Addon({ onComplete }: Props) {
                     <button onClick={runInstall}>Retry</button>
                 )}
                 {phase === "done" && (
-                    <button onClick={() => onComplete()}>Continue</button>
+                    <button className="btn-primary" onClick={() => onComplete()}>Continue</button>
                 )}
             </div>
         </div>

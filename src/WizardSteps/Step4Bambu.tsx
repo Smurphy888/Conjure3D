@@ -67,7 +67,7 @@ export function Step4Bambu({ onComplete }: Props) {
             <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
                 <button onClick={detect} disabled={checking}>Re-check</button>
                 {resolvedPath && (
-                    <button onClick={handleContinue}>Continue</button>
+                    <button className="btn-primary" onClick={handleContinue}>Continue</button>
                 )}
             </div>
         </div>

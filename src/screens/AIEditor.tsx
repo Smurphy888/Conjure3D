@@ -384,6 +384,7 @@ export function AIEditor() {
                     </div>
 
                     <button
+                        className="btn-primary"
                         onClick={handleGenerate}
                         disabled={generating}
                         style={{ width: "100%" }}
@@ -428,6 +429,7 @@ export function AIEditor() {
                         </div>
 
                         <button
+                            className="btn-primary"
                             onClick={handleApply}
                             disabled={applying || !currentGlbPath || !gate.allowed || chain.length === 0}
                             style={{ width: "100%", marginTop: "0.75rem" }}
