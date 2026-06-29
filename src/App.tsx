@@ -43,7 +43,7 @@ function AppRoutes({ settings, onWizardDone }: { settings: Settings; onWizardDon
 
 function App() {
     const [settings, setSettings] = useState<Settings | null>(null);
-    const [forceWizard, setForceWizard] = useState(false);
+    const [forceWizard, setForceWizard] = useState<number | false>(false);
 
     useEffect(() => {
         readSettings()
@@ -53,7 +53,7 @@ function App() {
 
     useEffect(() => {
         let cleanup: (() => void) | undefined;
-        listen("run-wizard", () => setForceWizard(true)).then((fn) => {
+        listen<{ startAt?: number }>("run-wizard", (e) => setForceWizard(e.payload?.startAt ?? 0)).then((fn) => {
             cleanup = fn;
         });
         return () => cleanup?.();
@@ -63,14 +63,14 @@ function App() {
         return <div className="container"><p>Loading...</p></div>;
     }
 
-    const effective: Settings = forceWizard
+    const effective: Settings = forceWizard !== false
         ? {
               ...settings,
               wizard: {
-                  step_blender: false,
-                  step_addon: false,
-                  step_socket: false,
-                  step_bambu: false,
+                  step_blender: forceWizard > 0,
+                  step_addon: forceWizard > 1,
+                  step_socket: forceWizard > 2,
+                  step_bambu: forceWizard > 3,
                   step_meshy: false,
               },
           }
