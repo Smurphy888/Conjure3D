@@ -9,7 +9,7 @@
 :root {
   /* Surfaces — base → elevated. Cards/inputs sit on --surface; hover/active
      lifts to --surface-2. Borders separate them on a dark field. */
-  --bg: #0f0f0f;
+  --bg: #0d0b1c;
   --surface: #18181b;
   --surface-2: #232329;
   --border: #2e2e35;
@@ -72,6 +72,16 @@ body {
      CLIPPED any page taller than the viewport with no way to scroll (the
      cut-off "Accept & Edit" button). Block flow + .container's min-height:100vh
      keeps short pages centered while tall pages grow and the window scrolls. */
+
+  /* Global app background: deep violet gradient + soft ambient bokeh glows.
+     background-attachment: fixed keeps the orbs anchored to the viewport
+     instead of scrolling with tall pages (AI Editor, Settings). */
+  background:
+    radial-gradient(circle at 50% -10%, rgba(120, 60, 240, 0.28) 0%, rgba(120, 60, 240, 0) 35%),
+    radial-gradient(circle at 12% 105%, rgba(60, 120, 255, 0.16) 0%, rgba(60, 120, 255, 0) 30%),
+    radial-gradient(circle at 88% 100%, rgba(200, 80, 255, 0.14) 0%, rgba(200, 80, 255, 0) 28%),
+    linear-gradient(160deg, #0e0820 0%, #150d2e 45%, #0d0b1c 100%);
+  background-attachment: fixed;
 }
 
 .container {
@@ -124,6 +134,7 @@ h1 {
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--accent);
+  text-shadow: 0 0 24px rgba(160, 100, 255, 0.45);
   margin: 0 0 var(--space-3);
 }
 h2 {
