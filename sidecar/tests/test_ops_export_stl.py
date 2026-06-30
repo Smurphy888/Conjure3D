@@ -28,6 +28,9 @@ def test_color_token_canonical_map():
     # none mode never adds a suffix, whatever the object is called.
     assert export_stl.color_token("Scene", "none") == ""
     assert export_stl.color_token("anything", "none") == ""
+    # bisect halves always get distinct suffixes, even in "none" mode.
+    assert export_stl.color_token("Conjure_HalfA", "none") == "a"
+    assert export_stl.color_token("Conjure_HalfB", "none") == "b"
     # zebra groups.
     assert export_stl.color_token("Conjure_ColorA", "zebra") == "red"
     assert export_stl.color_token("Conjure_ColorB", "zebra") == "yellow"
@@ -93,6 +96,20 @@ def test_stem_is_slugified_windows_legal_and_code_compiles():
     assert 'STEM = "moms-vase_2026-05-16-105400"' in code
     assert ":" not in code.split("STEM = ")[1].splitlines()[0]
     compile(code, "<generated>", "exec")  # snippet is valid Python
+
+
+def test_bisect_two_files_a_b():
+    """Bisect produces 2 STL files (_a / _b) even though mode is 'none'.
+    The count validator must not raise because it detects bisect halves."""
+    def fake(code, timeout=None, **kw):
+        return ('{"mode": "none", "dir": "d", "count": 2, "files": ['
+                '{"path": "d/v_ts_a.stl", "color": "a", "size": 80},'
+                '{"path": "d/v_ts_b.stl", "color": "b", "size": 80}]}')
+
+    with patch("ops.export_stl.execute_blender_code", side_effect=fake):
+        out = export_stl.run("d", "v", "ts", "none")
+    assert out["count"] == 2
+    assert {f["color"] for f in out["files"]} == {"a", "b"}
 
 
 def test_zebra_two_files_red_yellow():

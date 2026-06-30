@@ -15,6 +15,9 @@ export interface ProjectState {
     // alone — flat_part vs solid_decorative is indistinguishable there).
     objectType: ObjectType;
     colorSplitMode: ColorSplitMode;
+    /** True when the last applied chain included a bisect op.
+     *  Export uses this to show the correct STL count (2 halves, not 1). */
+    bisectInChain: boolean;
     editApplied: boolean;
     /** .3mf written during apply_chain (while Blender session was live).
      *  Null if pre-bake failed or no Apply has run. Export uses this to
@@ -31,6 +34,7 @@ export const INITIAL_STATE: ProjectState = {
     lastSanity: null,
     objectType: "vase",
     colorSplitMode: "none",
+    bisectInChain: false,
     editApplied: false,
     prebaked3mfPath: null,
 };
@@ -42,7 +46,7 @@ export type ProjectAction =
     | { type: "SET_GLB_PATH"; selectedGlbPath: string }
     | { type: "SET_EDITS"; edits: Edit[] }
     | { type: "SET_SANITY"; lastSanity: Sanity }
-    | { type: "SET_EDIT_META"; objectType: ObjectType; colorSplitMode: ColorSplitMode; prebaked3mfPath?: string | null }
+    | { type: "SET_EDIT_META"; objectType: ObjectType; colorSplitMode: ColorSplitMode; bisectInChain?: boolean; prebaked3mfPath?: string | null }
     | { type: "RESET" };
 
 export function projectReducer(state: ProjectState, action: ProjectAction): ProjectState {
@@ -64,6 +68,7 @@ export function projectReducer(state: ProjectState, action: ProjectAction): Proj
                 ...state,
                 objectType: action.objectType,
                 colorSplitMode: action.colorSplitMode,
+                bisectInChain: action.bisectInChain ?? false,
                 editApplied: true,
                 prebaked3mfPath: action.prebaked3mfPath ?? null,
             };

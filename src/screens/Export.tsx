@@ -84,7 +84,7 @@ function recipe(objectType: string, longestMm: number | null): string {
 
 export function Export() {
     const navigate = useNavigate();
-    const { name, objectType, colorSplitMode, editApplied, lastSanity, prebaked3mfPath } = useProjectState();
+    const { name, objectType, colorSplitMode, bisectInChain, editApplied, lastSanity, prebaked3mfPath } = useProjectState();
     const { state: connState } = useConnection();
     const gate = editChainGate(connState);
 
@@ -100,7 +100,7 @@ export function Export() {
     const recipeText = recipe(objectType, longestMm);
 
     const expectedCount =
-        colorSplitMode === "none" ? 1 : colorSplitMode === "zebra" ? 2 : 4;
+        bisectInChain ? 2 : colorSplitMode === "none" ? 1 : colorSplitMode === "zebra" ? 2 : 4;
 
     async function doExport3mf(): Promise<string | null> {
         const r = await invokeSidecar<ThreemfResult>("export.threemf", {

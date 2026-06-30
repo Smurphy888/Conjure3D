@@ -58,9 +58,16 @@ def color_token(name: str, mode: str) -> str:
     not here); keep the two in sync — ``test_export_stl`` asserts the snippet
     still contains the same patterns.
 
-    ``none`` → always ``""`` (bare stem). For split modes, an object whose
-    name matches no Conjure_* pattern also yields ``""``.
+    Bisect halves (``Conjure_HalfA`` / ``Conjure_HalfB``) are handled before
+    the mode check so they get distinct suffixes even though they run in
+    ``"none"`` mode (bisect doesn't change color_split_mode).
+
+    ``none`` → always ``""`` (bare stem) for all other objects.
     """
+    if name == "Conjure_HalfA":
+        return "a"
+    if name == "Conjure_HalfB":
+        return "b"
     if mode == NONE:
         return ""
     m = _QUARTER_RE.match(name)
@@ -107,12 +114,20 @@ def run(dst_dir: str, slug: str, ts: str, mode: str,
         execute_blender_code(_code(dst_dir, stem, mode), timeout=timeout)
     )
 
-    want = EXPECTED_COUNT[mode]
     got = result.get("count")
+    files_out = result.get("files", [])
+    # Bisect halves use color tokens "a"/"b" and run in "none" mode, so they
+    # can't use the hardcoded EXPECTED_COUNT["none"]=1. Skip count gating when
+    # the output contains bisect pieces; otherwise enforce the per-mode count.
+    is_bisect = any(
+        isinstance(f, dict) and f.get("color") in ("a", "b")
+        for f in files_out
+    )
+    want = EXPECTED_COUNT[mode] if not is_bisect else got
     if got != want:
         raise RuntimeError(
             f"{mode} export expected {want} STL file(s), got {got}: "
-            f"{[f.get('path') for f in result.get('files', [])]}"
+            f"{[f.get('path') for f in files_out]}"
         )
     return result
 
@@ -130,6 +145,10 @@ MODE = {json.dumps(mode)}
 
 
 def color_token(name):
+    if name == "Conjure_HalfA":
+        return "a"
+    if name == "Conjure_HalfB":
+        return "b"
     if MODE == "none":
         return ""
     m = re.match(r"Conjure_Q(\\d+)$", name)

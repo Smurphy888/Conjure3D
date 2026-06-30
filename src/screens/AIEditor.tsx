@@ -342,11 +342,13 @@ export function AIEditor() {
             // screens (Export uses these for the recipe). If chain has no
             // color_split edit, fall back to "none".
             const hasOpenTop = chain.some((e) => e.type === "open_top");
+            const hasBisect = chain.some((e) => e.type === "bisect");
             const cs = chain.find((e) => e.type === "color_split");
             dispatch({
                 type: "SET_EDIT_META",
                 objectType: hasOpenTop ? "vase" : objectType === "vase" ? "solid_decorative" : objectType,
                 colorSplitMode: (cs?.mode as ColorSplitMode | undefined) ?? "none",
+                bisectInChain: hasBisect,
                 prebaked3mfPath: result.threemf_path ?? null,
             });
             setCurrentGlbPath(result.preview_glb);
