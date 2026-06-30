@@ -1,0 +1,14 @@
+[
+  {"input": "Stylized minimalist vase",                        "expected": "stylized-minimalist-vase"},
+  {"input": "Mom's birthday 2026 ❤️",               "expected": "moms-birthday-2026"},
+  {"input": "Travel guitar v3",                               "expected": "travel-guitar-v3"},
+  {"input": "🎸🎸🎸",           "expected": "model"},
+  {"input": "",                                               "expected": "model"},
+  {"input": "  Hello World  ",                                "expected": "hello-world"},
+  {"input": "my_project_name",                                "expected": "my-project-name"},
+  {"input": "!@#$%^&*()",                                     "expected": "model"},
+  {"input": "a name where the hyphen lands at pos 41 x",      "expected": "a-name-where-the-hyphen-lands-at-pos-41"},
+  {"input": "ALLCAPS",                                        "expected": "allcaps"},
+  {"input": "multi---dash",                                   "expected": "multi-dash"},
+  {"input": "Straße_Berlin",                             "expected": "strae-berlin"}
+]

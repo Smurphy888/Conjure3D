@@ -1,0 +1,31 @@
+[project]
+name = "conjure3d-sidecar"
+version = "0.0.1"
+requires-python = ">=3.11"
+dependencies = [
+    "requests",
+    "keyring",
+    # Phase J.1: edit-chain schema validation for LLM output. Used by
+    # edit_chain_schema.py to validate the JSON the LLM emits before the
+    # orchestrator runs the chain.
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "responses",
+]
+
+# Phase J.4: real LLM backend. Optional because:
+#   - llama-cpp-python has no pre-built wheels for Python 3.14 yet, so
+#     installing it triggers a multi-minute source build that requires
+#     Visual Studio Build Tools. We don't want to force that on devs
+#     who only want to work on Blender / Meshy / wizard code.
+#   - The runtime gracefully falls back to the J.2 mock when this is
+#     not importable (see llm.try_install_llama_backend).
+#   - The 4.4 GB GGUF model file is also separately downloaded (J.5).
+# Install with:  pip install -e .[llm]
+llm = [
+    "llama-cpp-python>=0.3.0",
+]

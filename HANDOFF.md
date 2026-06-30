@@ -40,15 +40,21 @@ Conjure3D expects Blender to be **running and connected** every session. The Edi
 
 Update this as you go.
 
-- [ ] Phase A — Hello, Tauri (skeleton, build to .exe)
-- [ ] Phase B — Sidecar plumbing (thin sidecar with MCP socket client)
-- [ ] Phase C — First-run wizard (Blender detect, addon install, connection test)
-- [ ] Phase D — Local mock pipeline
-- [ ] Phase E — Real Blender ops via MCP
-- [ ] Phase F — Real Meshy
-- [ ] Phase G — Export + slicer launch
-- [ ] Phase H — Persistence
-- [ ] Phase I — Polish + ship
+- [x] Phase A — Hello, Tauri (skeleton, build to .exe) → `1034c76`
+- [x] Phase B — Sidecar plumbing (Issues #2–#5: JSON-RPC echo, Tauri↔sidecar, PyInstaller bundle, slugify Py+TS twins)
+- [x] Phase C — First-run wizard (Issues #6–#11: scaffolding, detect_blender, addon bundle, test_socket, detect_bambu+meshy key, five-screen routing)
+  - **Follow-up:** Step 2 UI (BlenderMCP addon install) is a stub button; backend `wizard.install_addon` is implemented and tested but the React step lacks real progress feedback. Address in Phase I polish.
+- [x] Phase D — Local mock pipeline (Issues #12–#14: mock Meshy, ThreePreview GLB component with drei Bounds + OrbitControls, mock edit.apply_chain + Editor wiring)
+- [ ] Phase E — Real Blender ops via MCP (Issues #15–#22)
+  - **Status:** queued; gated on user keeping Blender 4.2+ open with BlenderMCP "Connect to Claude" clicked (port 9876 must be LISTENING during fires). Wrapper currently set to `--model opus` for this phase.
+- [ ] Phase F — Real Meshy (Issue #23) — agent writes code + mock tests; live API acceptance is user-driven
+- [ ] Phase G — Export + slicer launch (Issues #24–#25)
+- [ ] Phase H — Persistence (Issue #26)
+- [ ] Phase I — Polish + ship (Issues #27–#30)
+
+### Side commits (not part of issue numbering)
+
+- `b5d86b4` — chore: add `protocol-asset` Tauri feature. Needed by ThreePreview to load GLB bytes via Tauri's resource protocol; surfaced during Phase D Issue #13. Not a numbered issue but kept on the main branch since it's required for the feature to function.
 
 ## Where to start (cold pickup)
 
@@ -71,6 +77,7 @@ Update this as you go.
 - **Volumes don't perfectly conserve across cuts** of dense voxel-remeshed meshes — `bm.calc_volume` has float precision limits. Tolerate ±1% in tests, log warnings beyond ±5%.
 - **Three.js GLTFLoader can't display materials without nodes.** Set diffuse colors before exporting the preview GLB or it'll render gray.
 - **Tauri 2's NSIS bundler signs only with a real cert.** Ship unsigned for v1; document the SmartScreen prompt in README.
+- **`tauri-winres` v0.3.6 breaks on absolute paths containing apostrophes** (`Project's\…`). Its `escape_string` emits `\'` for an apostrophe, which Microsoft's RC.EXE rejects ("file not found" with the apostrophe escaped as a path separator). We vendor the crate at `src-tauri/vendor/tauri-winres/` with the broken escape removed and wire it through `[patch.crates-io]` in `src-tauri/Cargo.toml`. Keep the patch until upstream fixes it; check periodically against newer tauri-winres releases.
 - **Meshy's signed S3 URLs expire (~24h).** Download the GLB to disk in Phase 4 and store the local path; never re-fetch from the URL later.
 - **Blender's signed volume sign depends on normal direction.** A negative volume = inverted normals; flip them before any other op or every downstream check is wrong.
 - **MCP `execute_blender_code` has a per-call socket timeout.** Long-running ops (heavy voxel remesh on a 2 m mesh) can hang the socket. Either chunk the ops or pre-scale before remesh.

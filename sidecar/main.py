@@ -1,0 +1,617 @@
+"""
+JSON-RPC 2.0 sidecar — stdin/stdout, newline-delimited.
+All diagnostic output goes to stderr; stdout is the protocol channel only.
+"""
+import json
+import sys
+import traceback
+import webbrowser
+
+import keyring
+
+from slugify import slugify as _slugify
+from settings import read_settings, write_settings
+from blender import detect_blender
+from addon import install_addon
+from connection import test_socket as _test_socket
+from bambu import detect_bambu as _detect_bambu
+import meshy as _meshy  # REAL Meshy API (Phase F accepted by user 2026-05-18; spends credits)
+import tripo as _tripo  # Tripo AI alternative (user-selectable via generation_provider)
+import orchestrator as _orchestrator  # real ops chain (Phase E #22)
+import slicer as _slicer  # Bambu Studio hand-off (Phase G #25)
+import project as _project  # .conjure3d.json save/load (Phase H #26)
+import llm as _llm  # NL editor (Phase J.2 — mocked backend; J.4 swaps to llama.cpp)
+import llm_openrouter as _openrouter  # Phase J.6 — cloud LLM escape hatch
+import llm_openai as _openai  # Phase J.6 — direct OpenAI cloud provider
+import llm_model_download as _model_dl  # Phase J.5 — resumable GGUF download
+from pydantic import ValidationError as _PydanticValidationError
+
+_KEYRING_SERVICE = "conjure3d"
+_KEYRING_ACCOUNT = "meshy_api_key"
+_TRIPO_KEYRING_ACCOUNT = "tripo_api_key"
+# Mock backend names — used to decide whether the AI Editor is "degraded"
+# (talking to the keyword router instead of a real model).
+_MOCK_BACKEND_NAMES = ("mock-keyword-router", "MockBackend")
+
+COMMANDS = {}
+
+
+def register(name):
+    def decorator(fn):
+        COMMANDS[name] = fn
+        return fn
+    return decorator
+
+
+@register("system.ping")
+def system_ping(params):
+    return {"ok": True, "msg": "pong"}
+
+
+@register("util.slugify")
+def util_slugify(params):
+    return {"slug": _slugify(params["name"])}
+
+
+@register("settings.read")
+def settings_read(_params):
+    return read_settings()
+
+
+@register("settings.write")
+def settings_write(params):
+    write_settings(params["settings"])
+    return {"ok": True}
+
+
+@register("wizard.detect_blender")
+def wizard_detect_blender(_params):
+    return detect_blender()
+
+
+@register("wizard.install_addon")
+def wizard_install_addon(params):
+    return install_addon(params["blender_version"])
+
+
+@register("wizard.test_socket")
+def wizard_test_socket(_params):
+    return _test_socket()
+
+
+@register("wizard.detect_bambu")
+def wizard_detect_bambu(_params):
+    return _detect_bambu()
+
+
+@register("system.set_meshy_key")
+def system_set_meshy_key(params):
+    key = params["key"]
+    keyring.set_password(_KEYRING_SERVICE, _KEYRING_ACCOUNT, key)
+    return {"ok": True}
+
+
+@register("system.has_meshy_key")
+def system_has_meshy_key(_params):
+    val = keyring.get_password(_KEYRING_SERVICE, _KEYRING_ACCOUNT)
+    return {"set": val is not None and val != ""}
+
+
+@register("system.open_url")
+def system_open_url(params):
+    webbrowser.open(params["url"])
+    return {"ok": True}
+
+
+@register("system.set_tripo_key")
+def system_set_tripo_key(params):
+    key = params["key"]
+    keyring.set_password(_KEYRING_SERVICE, _TRIPO_KEYRING_ACCOUNT, key)
+    return {"ok": True}
+
+
+@register("system.has_tripo_key")
+def system_has_tripo_key(_params):
+    val = keyring.get_password(_KEYRING_SERVICE, _TRIPO_KEYRING_ACCOUNT)
+    return {"set": val is not None and val != ""}
+
+
+@register("system.get_generation_provider")
+def system_get_generation_provider(_params):
+    settings = read_settings()
+    return {"provider": settings.get("generation_provider", "meshy")}
+
+
+@register("system.set_generation_provider")
+def system_set_generation_provider(params):
+    provider = params["provider"]
+    if provider not in ("meshy", "tripo"):
+        raise ValueError(f"Unknown provider: {provider!r}. Must be 'meshy' or 'tripo'.")
+    settings = read_settings()
+    settings["generation_provider"] = provider
+    write_settings(settings)
+    return {"ok": True}
+
+
+@register("meshy.generate_preview")
+def meshy_generate_preview(params):
+    return _meshy.generate_preview(params)
+
+
+@register("meshy.poll_task")
+def meshy_poll_task(params):
+    return _meshy.poll_task(params)
+
+
+@register("meshy.refine")
+def meshy_refine(params):
+    return _meshy.refine(params)
+
+
+@register("meshy.set_fixture")
+def meshy_set_fixture(params):
+    # Mock-only (dev fixture toggle). Real meshy.py has no set_fixture; guard
+    # so a stray call can't AttributeError now that real Meshy is wired.
+    fn = getattr(_meshy, "set_fixture", None)
+    if fn is None:
+        return {"ok": False, "error": "set_fixture unavailable (real Meshy active)"}
+    return fn(params)
+
+
+@register("meshy.download_glb")
+def meshy_download_glb(params):
+    # Real Meshy returns a signed S3 URL that expires (~24h) and that the
+    # webview cannot render directly. Fetch once to a real, writable project
+    # dir derived from the project name (frontend never builds Windows paths).
+    import os
+    from pathlib import Path
+    from slugify import slugify
+
+    slug = slugify(params.get("name") or "model")
+    base = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Conjure3D" / "projects" / slug
+    base.mkdir(parents=True, exist_ok=True)
+    dest = str(base / f"{slug}.glb")
+    return _meshy.download_glb({"url": params["url"], "dest": dest})
+
+
+# ── Provider-neutral model.* commands ────────────────────────────────────────
+# These dispatch to the active generation_provider (meshy or tripo).
+# Generate.tsx calls model.* so the frontend never hard-codes a provider.
+
+def _active_provider() -> str:
+    return read_settings().get("generation_provider", "meshy")
+
+
+@register("model.generate_preview")
+def model_generate_preview(params):
+    if _active_provider() == "tripo":
+        return _tripo.generate_preview(params)
+    return _meshy.generate_preview(params)
+
+
+@register("model.poll_task")
+def model_poll_task(params):
+    if _active_provider() == "tripo":
+        return _tripo.poll_task(params)
+    return _meshy.poll_task(params)
+
+
+@register("model.download_glb")
+def model_download_glb(params):
+    import os
+    from pathlib import Path
+    from slugify import slugify
+
+    slug = slugify(params.get("name") or "model")
+    base = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Conjure3D" / "projects" / slug
+    base.mkdir(parents=True, exist_ok=True)
+    dest = str(base / f"{slug}.glb")
+    dl_params = {"url": params["url"], "dest": dest}
+    if _active_provider() == "tripo":
+        return _tripo.download_glb(dl_params)
+    return _meshy.download_glb(dl_params)
+
+
+@register("edit.apply_chain")
+def edit_apply_chain(params):
+    return _orchestrator.apply_chain(params)
+
+
+@register("export.stl")
+def export_stl_cmd(params):
+    """
+    Export the CURRENT Blender scene's mesh(es) to binary STL(s) in the
+    project dir. Requires a prior successful edit.apply_chain (mesh in
+    scene) + Blender connected. Never raises across JSON-RPC: structured
+    {ok:false,...} on any failure so the Export screen can render it.
+
+    params: {slug, mode("none"|"zebra"|"quarter"), dst_dir?}
+    ok: {"ok": true, "mode", "dir", "count", "files":[{path,color,size}]}
+    """
+    import os
+    import time
+    from pathlib import Path
+    from slugify import slugify
+    from ops import export_stl
+
+    slug = slugify(params.get("slug") or "model")
+    mode = params.get("mode") or "none"
+    dst_dir = params.get("dst_dir") or str(
+        Path(os.environ.get("LOCALAPPDATA", Path.home()))
+        / "Conjure3D" / "projects" / slug
+    )
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    try:
+        result = export_stl.run(dst_dir, slug, ts, mode)
+        return {"ok": True, **result}
+    except Exception as exc:  # noqa: BLE001 — surface, never raise across RPC
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+@register("export.threemf")
+def export_threemf_cmd(params):
+    """Export the current Blender scene as a Bambu-compatible .3mf with
+    the recipe baked in. Same input shape as export.stl plus the recipe
+    inputs (object_type, longest_mm) so the writer knows which preset
+    to embed.
+
+    params: {slug, mode("none"|"zebra"|"quarter"), object_type, longest_mm?, dst_dir?}
+    ok: {"ok": true, "path": str, "size": int, "object_count": int,
+         "filament_count": int, "mode": str, "object_type": str}
+    """
+    import os
+    import time
+    from pathlib import Path
+    from slugify import slugify
+    from ops import export_3mf
+
+    slug = slugify(params.get("slug") or "model")
+    mode = params.get("mode") or "none"
+    object_type = params.get("object_type") or "solid_decorative"
+    longest_mm = params.get("longest_mm")
+    dst_dir = params.get("dst_dir") or str(
+        Path(os.environ.get("LOCALAPPDATA", Path.home()))
+        / "Conjure3D" / "projects" / slug
+    )
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    try:
+        result = export_3mf.run(
+            dst_dir=dst_dir,
+            slug=slug,
+            ts=ts,
+            mode=mode,
+            object_type=object_type,
+            longest_mm=longest_mm,
+        )
+        return {"ok": True, **result}
+    except Exception as exc:  # noqa: BLE001 — surface, never raise across RPC
+        print(f"[export.threemf] {type(exc).__name__}: {exc}", file=sys.stderr)
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+@register("slicer.launch")
+def slicer_launch(params):
+    return _slicer.launch(params)
+
+
+@register("project.save")
+def project_save(params):
+    return _project.save(params)
+
+
+@register("project.load")
+def project_load(params):
+    return _project.load(params)
+
+
+@register("llm.backend_info")
+def llm_backend_info(_params):
+    """Cheap, frontend-safe metadata about the active LLM backend. Used by
+    the AI Editor's status badge so the user can see whether they're
+    talking to the mock (J.2/J.3), local llama.cpp (J.4), or a remote
+    API (J.6). Never blocks; never spends a token.
+
+    install_status surfaces *why* we're on the mock, so the AI Editor
+    can tell the user "model not downloaded yet" vs "library missing"
+    vs "model failed to load" without us having to add a separate
+    diagnostic endpoint.
+
+    `degraded` is the SERVER's verdict on whether the user is talking to a
+    real model — true only when the active backend is the keyword mock. The
+    UI must key its "basic mode" banner off this, NOT off install_status:
+    once a cloud backend is swapped in, install_status still carries the
+    stale local-load reason (e.g. "load_failed"), but degraded is false."""
+    backend = _llm.backend_name()
+    return {
+        "backend": backend,
+        "install_status": _llm.install_status(),
+        "degraded": backend in _MOCK_BACKEND_NAMES,
+        "provider": read_settings().get("llm_provider", "local"),
+    }
+
+
+@register("system.set_openrouter_key")
+def system_set_openrouter_key(params):
+    _openrouter.set_openrouter_key(params["key"])
+    return {"ok": True}
+
+
+@register("system.has_openrouter_key")
+def system_has_openrouter_key(_params):
+    return {"set": _openrouter.has_openrouter_key()}
+
+
+@register("system.set_openai_key")
+def system_set_openai_key(params):
+    _openai.set_openai_key(params["key"])
+    return {"ok": True}
+
+
+@register("system.has_openai_key")
+def system_has_openai_key(_params):
+    return {"set": _openai.has_openai_key()}
+
+
+# Cloud provider id -> (backend class, default model). Local is handled
+# separately (no key, no validation).
+_CLOUD_PROVIDERS = {
+    "openrouter": (_openrouter.OpenRouterBackend, _openrouter.DEFAULT_MODEL),
+    "openai": (_openai.OpenAIBackend, _openai.DEFAULT_MODEL),
+}
+
+
+@register("llm.get_provider")
+def llm_get_provider(_params):
+    s = read_settings()
+    provider = s.get("llm_provider", "local")
+    default_model = _CLOUD_PROVIDERS.get(provider, (None, None))[1]
+    return {
+        "provider": provider,
+        "model": s.get("llm_model") or default_model,
+        "has_openrouter_key": _openrouter.has_openrouter_key(),
+        "has_openai_key": _openai.has_openai_key(),
+    }
+
+
+@register("llm.set_provider")
+def llm_set_provider(params):
+    """Switch the active LLM provider, VALIDATING a cloud key live before the
+    swap so a bad key fails immediately instead of silently leaving the app in
+    a broken state with no recovery UI. provider: "local"|"openrouter"|"openai".
+
+    On a cloud switch we build the backend, call validate() (a free auth check),
+    and ONLY set it active + persist if it passes. On failure we keep the
+    current backend and return {ok: False, message}. The frontend shows that
+    message inline. "local" never validates (no key)."""
+    provider = params["provider"]
+    if provider not in ("local", *_CLOUD_PROVIDERS):
+        raise ValueError(f"Unknown llm provider: {provider!r}")
+    model = params.get("model") or None
+
+    if provider == "local":
+        settings = read_settings()
+        settings["llm_provider"] = "local"
+        settings["llm_model"] = None
+        write_settings(settings)
+        _select_llm_backend(settings)
+        name = _llm.backend_name()
+        return {"ok": True, "backend": name, "degraded": name in _MOCK_BACKEND_NAMES, "provider": "local"}
+
+    backend_cls = _CLOUD_PROVIDERS[provider][0]
+    try:
+        backend = backend_cls(model=model)
+        backend.validate()  # GATE: live auth check before we switch
+    except Exception as exc:  # noqa: BLE001 — structured error, never raise across RPC
+        current = _llm.backend_name()
+        return {
+            "ok": False,
+            "message": str(exc),
+            "provider_attempted": provider,
+            "degraded": current in _MOCK_BACKEND_NAMES,
+        }
+
+    _llm.set_backend(backend)
+    settings = read_settings()
+    settings["llm_provider"] = provider
+    settings["llm_model"] = model
+    write_settings(settings)
+    name = _llm.backend_name()
+    return {"ok": True, "backend": name, "degraded": False, "provider": provider}
+
+
+@register("llm.model_status")
+def llm_model_status(_params):
+    """Snapshot of the model-file download state plus a model_present
+    bool. Polled by the AI Editor / app-shell chip every ~500 ms while
+    a download is active. Cheap; no I/O beyond the dest_path stat."""
+    return _model_dl.get_downloader().status()
+
+
+@register("llm.download_start")
+def llm_download_start(params):
+    """Start (or resume) a model download. Idempotent: calling while
+    a download is already in progress returns the current status
+    rather than spawning a second thread. The wizard's completion
+    hook calls this for background prefetch; the AI Editor's "Retry"
+    button also calls it after a failed attempt."""
+    url = params.get("url") or _model_dl.DEFAULT_MODEL_URL
+    expected_sha = params.get("expected_sha256")
+    dl = _model_dl.get_downloader(url=url, expected_sha256=expected_sha)
+    return dl.start()
+
+
+@register("llm.download_cancel")
+def llm_download_cancel(_params):
+    """Signal the worker to stop. Leaves the .partial file on disk so
+    a subsequent llm.download_start picks up where it left off."""
+    return _model_dl.get_downloader().cancel()
+
+
+@register("llm.generate_chain")
+def llm_generate_chain(params):
+    """Turn a free-form user instruction into a validated edit chain.
+
+    params: {"user_prompt": str, "object_type"?: "vase"|"solid_decorative"|"flat_part",
+             "sanity"?: dict — current Sanity snapshot for context}
+    returns on success:
+        {"ok": True, "edits": [{...}, ...], "backend": str}
+    returns on validation failure (LLM emitted something Pydantic can't accept):
+        {"ok": False, "error_code": "schema_violation", "message": str}
+    returns on any other backend error:
+        {"ok": False, "error_code": "backend_error", "message": str}
+
+    We translate exceptions into structured errors here (instead of
+    letting them bubble to the dispatcher's generic internal-error path)
+    because the AI Editor needs to branch on the failure type: a
+    schema_violation gets a "retry with a clearer request" hint; a
+    backend_error gets a "the model crashed, fall back to manual" hint.
+    """
+    user_prompt = params.get("user_prompt", "")
+    object_type = params.get("object_type", "solid_decorative")
+    sanity = params.get("sanity")
+    try:
+        chain = _llm.generate_edit_chain(
+            user_prompt=user_prompt,
+            object_type=object_type,
+            sanity=sanity,
+        )
+    except _PydanticValidationError as exc:
+        return {
+            "ok": False,
+            "error_code": "schema_violation",
+            "message": str(exc),
+            "backend": _llm.backend_name(),
+        }
+    except Exception as exc:  # noqa: BLE001 — structured error, never raise across RPC
+        return {
+            "ok": False,
+            "error_code": "backend_error",
+            "message": f"{type(exc).__name__}: {exc}",
+            "backend": _llm.backend_name(),
+        }
+    return {
+        "ok": True,
+        "edits": chain.to_orchestrator_input(),
+        "backend": _llm.backend_name(),
+    }
+
+
+def dispatch(req):
+    """
+    Validate and dispatch one JSON-RPC 2.0 request dict.
+    Returns a response dict, or None for notifications (no id).
+    """
+    req_id = req.get("id")
+
+    if req.get("jsonrpc") != "2.0" or "method" not in req:
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "error": {"code": -32600, "message": "Invalid Request"},
+        }
+
+    method = req["method"]
+    params = req.get("params") or {}
+
+    if method not in COMMANDS:
+        if req_id is None:
+            return None
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "error": {"code": -32601, "message": f"Method not found: {method}"},
+        }
+
+    try:
+        result = COMMANDS[method](params)
+    except Exception as exc:
+        # Full traceback to stderr. The Tauri host pipes the sidecar's stderr
+        # to %LOCALAPPDATA%\Conjure3D\logs\<timestamp>.log (Issue #29), so a
+        # crash always leaves a stack trace on disk for the Copy-diagnostic
+        # button. The JSON-RPC error stays one-line (data=str(exc)).
+        print(
+            f"[sidecar] internal error in {method}: {exc}\n"
+            f"{traceback.format_exc()}",
+            file=sys.stderr,
+            flush=True,
+        )
+        if req_id is None:
+            return None
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "error": {"code": -32603, "message": "Internal error", "data": str(exc)},
+        }
+
+    if req_id is None:
+        return None
+
+    return {"jsonrpc": "2.0", "id": req_id, "result": result}
+
+
+def run_loop(stdin=None, stdout=None):
+    if stdin is None:
+        stdin = sys.stdin
+    if stdout is None:
+        stdout = sys.stdout
+
+    for line in stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            req = json.loads(line)
+        except json.JSONDecodeError as exc:
+            response = {
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {"code": -32700, "message": f"Parse error: {exc}"},
+            }
+            print(json.dumps(response), file=stdout, flush=True)
+            continue
+
+        response = dispatch(req)
+        if response is not None:
+            print(json.dumps(response), file=stdout, flush=True)
+
+
+def _select_llm_backend(settings: dict) -> str:
+    """Pick the AI-Editor backend from settings. Always safe; never raises.
+
+    - "openrouter": swap in OpenRouterBackend if a key is present (skips the
+      local llama probe entirely — pointless, and on some CPUs it crashes).
+      Without a key, stays on the mock and reports "openrouter_no_key".
+    - "local" (default): attempt the bundled llama.cpp; on any failure the
+      mock stays in place and llm.install_status carries the reason.
+
+    Returns a short status string (logged to stderr)."""
+    provider = settings.get("llm_provider", "local")
+
+    if provider in _CLOUD_PROVIDERS:
+        backend_cls = _CLOUD_PROVIDERS[provider][0]
+        try:
+            backend = backend_cls(model=settings.get("llm_model"))
+            backend.warm_up()  # key-presence check only (no network at startup)
+            _llm.set_backend(backend)
+            return f"{provider} ({backend.model})"
+        except Exception as exc:  # noqa: BLE001 — leave mock in place on any error
+            return f"{provider}_unavailable: {exc}"
+
+    # Local path — try the bundled llama.cpp (J.4). The mock is the fallback.
+    return _llm.try_install_llama_backend()
+
+
+if __name__ == "__main__":
+    # Choose the AI-Editor backend before the RPC loop accepts requests.
+    # Any failure is absorbed — the AI Editor stays on the keyword mock and
+    # surfaces the reason via llm.backend_info (degraded + install_status).
+    try:
+        status = _select_llm_backend(read_settings())
+        print(f"[sidecar] LLM backend select: {status}", file=sys.stderr, flush=True)
+    except Exception as exc:  # noqa: BLE001 — defensive; never block startup
+        print(
+            f"[sidecar] LLM backend select raised (shouldn't happen): {exc}",
+            file=sys.stderr,
+            flush=True,
+        )
+    run_loop()

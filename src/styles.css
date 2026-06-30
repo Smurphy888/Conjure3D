@@ -1,0 +1,345 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   Design tokens — single source of truth for color, spacing, radius, motion.
+   Informed by the visual language of pro text-to-3D tools (Meshy, Tripo
+   Studio, Luma Genie): a dark neutral base, layered surfaces for depth, and
+   ONE vibrant accent reserved for primary actions and focus feedback.
+   Migrate inline hex values onto these tokens incrementally — don't do it all
+   at once.
+   ────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* Surfaces — base → elevated. Cards/inputs sit on --surface; hover/active
+     lifts to --surface-2. Borders separate them on a dark field. */
+  --bg: #0f0f0f;
+  --surface: #18181b;
+  --surface-2: #232329;
+  --border: #2e2e35;
+  --border-strong: #3a3a44;
+
+  /* Text — descending emphasis. --text-dim kept as an alias because
+     Step2Addon already references it. */
+  --text: #f4f4f5;
+  --text-muted: #a1a1aa;
+  --text-faint: #71717a;
+  --text-dim: #a1a1aa;
+
+  /* Accent — the brand purple. The only saturated color in the chrome;
+     everything else is neutral so primary actions read instantly. */
+  --accent: #a855f7;
+  --accent-hover: #b974fa;
+  --accent-active: #9333ea;
+  --accent-contrast: #ffffff;
+  --accent-soft: rgba(168, 85, 247, 0.14);
+  --accent-ring: rgba(168, 85, 247, 0.45);
+
+  /* Semantic — formalized from the values already scattered inline. */
+  --danger: #ff6b6b;
+  --warn: #f5a623;
+  --success: #2ecc71;
+
+  /* Spacing scale (4px base). */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
+  /* Radius — soft, modern; cards rounder than controls. */
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+
+  /* Elevation + motion. */
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.55);
+  --transition: 140ms ease;
+
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  /* NOT display:flex/place-items:center — that vertically centered #root and
+     CLIPPED any page taller than the viewport with no way to scroll (the
+     cut-off "Accept & Edit" button). Block flow + .container's min-height:100vh
+     keeps short pages centered while tall pages grow and the window scrolls. */
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* DON'T use justify-content: center directly — it clips any page taller
+     than 100vh because flex centring treats the container's height as
+     fixed and pushes overflowing items above/below the viewport with no
+     scroll path. Instead use the pseudo-element auto-margin trick: the
+     ::before / ::after take all the *spare* vertical space when content
+     is short (so short pages still centre vertically) and collapse to 0
+     when content overflows (so tall pages flow naturally and the body
+     scrolls). This was the J.3 dogfood bug — the AI Editor's Back/Next
+     buttons sat just below the viewport edge with no scroll. */
+  min-height: 100vh;
+  text-align: center;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 2rem 1rem;
+}
+.container::before,
+.container::after {
+  content: "";
+  margin: auto 0;
+}
+
+/* Centering fix: #root spanned shrink-to-fit so screens hugged the left.
+   Make the app fill the viewport and give content blocks a centered,
+   sensible max width with full-width form controls. */
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+.container > div {
+  width: min(640px, 100%);
+}
+
+.container input,
+.container textarea,
+.container select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ── Typography ───────────────────────────────────────────────────────────── */
+h1 {
+  font-size: 2.6em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  margin: 0 0 var(--space-3);
+}
+h2 {
+  font-size: 1.55em;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0 0 var(--space-3);
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────────
+   Plain <button> is the neutral/secondary style (replaces the raw OS-gray
+   default). Emphasis is opt-in via .btn-primary on genuine forward CTAs.
+   `:not(.link-button)` protects text-link buttons from gaining a box.
+   ───────────────────────────────────────────────────────────────────────── */
+button:not(.link-button) {
+  font: inherit;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition),
+    color var(--transition), transform var(--transition), box-shadow var(--transition);
+}
+button:not(.link-button):hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--accent);
+}
+button:not(.link-button):active:not(:disabled) {
+  transform: translateY(1px);
+}
+button:not(.link-button):disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  color: var(--text-faint);
+}
+button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+/* Primary CTA — the single emphasized action per screen (Continue, Generate,
+   Apply, Export, Start). Filled accent so it reads at a glance.
+   NOTE: selectors are `button.btn-primary`, not bare `.btn-primary`. The base
+   rule `button:not(.link-button)` scores (0,1,1) because :not() inherits its
+   argument's class weight — a bare `.btn-primary` at (0,1,0) would LOSE the
+   cascade and render neutral. Qualifying with `button` ties the specificity
+   and wins on source order (declared later). Same logic for hover/active. */
+button.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+button.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+button.btn-primary:active:not(:disabled) {
+  background: var(--accent-active);
+  border-color: var(--accent-active);
+}
+
+/* ── Form controls ────────────────────────────────────────────────────────
+   Scoped to text-like inputs ONLY — blanket `input` would give the radio
+   selectors in Step5Meshy (provider) and Export (format) a surface box and
+   full-width glyph. Radios/checkboxes get accent theming + auto width instead.
+   ───────────────────────────────────────────────────────────────────────── */
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="search"],
+input[type="email"],
+input[type="url"],
+textarea,
+select {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.625rem;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+input[type="search"]:focus,
+input[type="email"]:focus,
+input[type="url"]:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-faint);
+}
+
+/* Radios/checkboxes: undo the .container `width:100%` (which stretched the
+   clickable box) and tint them with the brand accent. Source order beats the
+   equal-specificity .container rule above. */
+input[type="radio"],
+input[type="checkbox"] {
+  width: auto;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* ── Inline code / preformatted blocks (file paths, slicer recipe) ────────── */
+code {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.08rem 0.34rem;
+  font-size: 0.85em;
+}
+pre {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+}
+pre code {
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+/* Phase I Issue #27 — connection badge + reconnect dialog */
+.conn-badge {
+  position: fixed;
+  bottom: 12px;
+  right: 12px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.78rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.conn-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #888;
+}
+.conn-checking .conn-dot { background: var(--warn); }
+.conn-connected .conn-dot { background: var(--success); }
+.conn-disconnected .conn-dot { background: var(--danger); }
+.conn-connected { color: var(--success); }
+.conn-disconnected { color: var(--danger); }
+.conn-checking { color: var(--warn); }
+
+.conn-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1001;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.conn-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.5rem;
+  max-width: 420px;
+  width: 90%;
+}
+
+/* Phase I Issue #28 — About link on the Home screen */
+.link-button {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 0.85rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+.link-button:hover {
+  color: var(--accent-hover);
+}
+.link-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-ring);
+  border-radius: 3px;
+}
+
+/* ── Inline loading spinner ──────────────────────────────────────────────────
+   Drop <span className="spinner" /> inside a button while an async op runs.
+   Uses currentColor so it inherits the button's text color without needing
+   extra variants for primary vs neutral buttons. */
+@keyframes _spin {
+  to { transform: rotate(360deg); }
+}
+.spinner {
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: _spin 0.65s linear infinite;
+  vertical-align: -0.12em;
+  margin-right: 0.4em;
+}

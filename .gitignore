@@ -25,13 +25,16 @@ sidecar/*.spec
 .ruff_cache/
 *.egg-info/
 
-# PyInstaller output (referenced by Tauri but not tracked)
+# Build artifacts placed in src-tauri/resources/ at build time (not tracked)
+src-tauri/resources/
 sidecar.exe
 src-tauri/binaries/sidecar*.exe
 
 # Editor / OS
 .vscode/
 .idea/
+.claude/settings.local.json
+
 *.swp
 .DS_Store
 Thumbs.db
