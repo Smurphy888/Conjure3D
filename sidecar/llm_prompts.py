@@ -151,6 +151,20 @@ EXAMPLES: list[tuple[str, dict]] = [
             ]
         },
     ),
+    (
+        '"scale to 80mm and split in half on z axis"',
+        {
+            "edits": [
+                {"type": "scale_to_longest", "target_mm": 80},
+                {"type": "voxel_remesh", "voxel_mm": 0.8},
+                {"type": "keep_largest"},
+                {"type": "recenter_xy"},
+                {"type": "fix_normals"},
+                {"type": "decimate", "target_faces": 50000},
+                {"type": "bisect", "axis": "z"},
+            ]
+        },
+    ),
 ]
 
 
