@@ -195,15 +195,15 @@ function OpCard({ edit, index, onChange, onRemove }: OpCardProps) {
 // ── Inline styles (kept local — the rest of the app uses inline styling) ────
 
 const cardStyle: React.CSSProperties = {
-    border: "1px solid #444",
-    borderRadius: 4,
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius-sm)" as React.CSSProperties["borderRadius"],
     padding: "0.5rem 0.6rem",
-    background: "rgba(255,255,255,0.03)",
+    background: "var(--surface)",
 };
 const removeBtnStyle: React.CSSProperties = {
     background: "transparent",
     border: "none",
-    color: "#aaa",
+    color: "var(--text-muted)" as React.CSSProperties["color"],
     fontSize: "1.1rem",
     cursor: "pointer",
     padding: 0,
@@ -448,6 +448,7 @@ export function AIEditor() {
                         disabled={generating}
                         style={{ width: "100%" }}
                     >
+                        {generating && <span className="spinner" />}
                         {generating ? "Generating plan…" : "Generate plan"}
                     </button>
 
@@ -471,7 +472,7 @@ export function AIEditor() {
                             </select>
                         </div>
                         {chain.length === 0 && (
-                            <p style={{ color: "#888", fontSize: "0.85rem" }}>
+                            <p style={{ color: "var(--text-faint)", fontSize: "0.85rem" }}>
                                 No plan yet. Generate one above, or add ops manually.
                             </p>
                         )}
@@ -493,16 +494,17 @@ export function AIEditor() {
                             disabled={applying || !currentGlbPath || !gate.allowed || chain.length === 0}
                             style={{ width: "100%", marginTop: "0.75rem" }}
                         >
+                            {applying && <span className="spinner" />}
                             {applying ? "Applying…" : "Apply chain"}
                         </button>
                         {!gate.allowed && gate.message && (
-                            <p style={{ color: "#f5a623", fontSize: "0.8rem", marginTop: "0.4rem" }}>{gate.message}</p>
+                            <p style={{ color: "var(--warn)", fontSize: "0.8rem", marginTop: "0.4rem" }}>{gate.message}</p>
                         )}
                         {error && (
-                            <p style={{ color: "red", fontSize: "0.8rem", marginTop: "0.4rem", whiteSpace: "pre-wrap" }}>{error}</p>
+                            <p style={{ color: "var(--danger)", fontSize: "0.8rem", marginTop: "0.4rem", whiteSpace: "pre-wrap" }}>{error}</p>
                         )}
                         {hint && (
-                            <p style={{ color: "#f5a623", fontSize: "0.8rem", marginTop: "0.4rem" }}>{hint}</p>
+                            <p style={{ color: "var(--warn)", fontSize: "0.8rem", marginTop: "0.4rem" }}>{hint}</p>
                         )}
                     </div>
                 </div>

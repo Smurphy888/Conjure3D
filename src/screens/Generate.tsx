@@ -15,6 +15,12 @@ const PROVIDER_LABELS: Record<string, string> = {
     tripo: "Tripo AI",
 };
 
+function phaseLabel(progress: number): string {
+    if (progress < 5) return "Starting up…";
+    if (progress < 75) return "Generating 3D mesh…";
+    return "Finalizing…";
+}
+
 export function Generate() {
     const { prompt, name } = useProjectState();
     const dispatch = useProjectDispatch();
@@ -80,7 +86,7 @@ export function Generate() {
         return (
             <div className="container">
                 <h2>Generate</h2>
-                <p style={{ color: "red" }}>{error}</p>
+                <p style={{ color: "var(--danger)" }}>{error}</p>
                 <button onClick={() => navigate("/new-project")}>Back</button>
             </div>
         );
@@ -89,15 +95,17 @@ export function Generate() {
     return (
         <div className="container">
             <h2>Generate</h2>
-            <p>{taskId ? `Generating your 3D model via ${providerLabel}…` : "Starting generation…"}</p>
+            <p style={{ color: "var(--text-muted)" }}>
+                {taskId ? `${phaseLabel(progress)} (via ${providerLabel})` : "Starting generation…"}
+            </p>
             <div
                 style={{
                     width: "min(420px, 80vw)",
-                    height: 14,
-                    border: "1px solid #444",
+                    height: 10,
+                    border: "1px solid var(--border)",
                     borderRadius: 999,
                     overflow: "hidden",
-                    background: "#1a1a1a",
+                    background: "var(--surface)",
                     margin: "0.75rem 0",
                 }}
             >
@@ -105,14 +113,14 @@ export function Generate() {
                     style={{
                         width: `${Math.max(4, progress)}%`,
                         height: "100%",
-                        background: "#a855f7",
+                        background: "var(--accent)",
                         transition: "width 0.4s ease",
                     }}
                 />
             </div>
-            <p style={{ fontSize: "0.9rem" }}>{progress}%</p>
+            <p style={{ fontSize: "0.9rem", color: "var(--text)" }}>{progress}%</p>
             {taskId && (
-                <p style={{ fontSize: "0.75rem", color: "#888" }}>Task: {taskId}</p>
+                <p style={{ fontSize: "0.75rem", color: "var(--text-faint)" }}>Task: {taskId}</p>
             )}
             <button onClick={() => navigate("/new-project")}>Cancel</button>
         </div>

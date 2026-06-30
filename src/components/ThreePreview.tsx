@@ -71,7 +71,7 @@ export function ThreePreview({ src, height = 400 }: ThreePreviewProps) {
     const url = convertFileSrc(src);
 
     return (
-        <div style={{ width: "100%", height, position: "relative" }}>
+        <div style={{ width: "100%", height, position: "relative", background: "#f5f5f5" }}>
             {/* Visible loading hint; the Canvas paints over it once the model
                 renders. If load fails, the error boundary replaces everything. */}
             <div
@@ -81,7 +81,7 @@ export function ThreePreview({ src, height = 400 }: ThreePreviewProps) {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: "#888",
+                    color: "#666",
                     fontSize: "0.9rem",
                     pointerEvents: "none",
                 }}
@@ -96,10 +96,9 @@ export function ThreePreview({ src, height = 400 }: ThreePreviewProps) {
                     style={{ position: "relative" }}
                     gl={{ alpha: false }}
                 >
-                    {/* Opaque scene bg so the "Loading…" hint behind the
-                        canvas can't bleed through transparent areas once the
-                        model paints. */}
-                    <color attach="background" args={["#0f0f0f"]} />
+                    {/* Off-white studio background — matches the wrapper div so
+                        the loading hint and canvas blend seamlessly. */}
+                    <color attach="background" args={["#f5f5f5"]} />
                     <ambientLight intensity={0.6} />
                     <directionalLight position={[5, 10, 5]} intensity={1} />
                     <Suspense fallback={null}>

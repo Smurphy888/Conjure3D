@@ -27,8 +27,11 @@ export function Home() {
     return (
         <div className="container">
             <h1>Conjure3D v{appVersion()}</h1>
+            <p style={{ color: "var(--text-muted)", fontSize: "0.95rem", marginTop: 0, marginBottom: "1rem" }}>
+                Describe it → generate it → print it.
+            </p>
             {sidecarError && (
-                <p style={{ color: "#ff6b6b", fontSize: "0.85rem" }}>{sidecarError}</p>
+                <p style={{ color: "var(--danger)", fontSize: "0.85rem" }}>{sidecarError}</p>
             )}
             <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center" }}>
                 <button className="btn-primary" onClick={() => navigate("/new-project")}>New Project</button>

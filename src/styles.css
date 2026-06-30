@@ -324,3 +324,22 @@ pre code {
   box-shadow: 0 0 0 3px var(--accent-ring);
   border-radius: 3px;
 }
+
+/* ── Inline loading spinner ──────────────────────────────────────────────────
+   Drop <span className="spinner" /> inside a button while an async op runs.
+   Uses currentColor so it inherits the button's text color without needing
+   extra variants for primary vs neutral buttons. */
+@keyframes _spin {
+  to { transform: rotate(360deg); }
+}
+.spinner {
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: _spin 0.65s linear infinite;
+  vertical-align: -0.12em;
+  margin-right: 0.4em;
+}
