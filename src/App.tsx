@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
 import { type Settings, DEFAULT_SETTINGS, readSettings, wizardComplete } from "./lib/settings";
@@ -16,6 +16,37 @@ import { Editor } from "./screens/Editor";
 import { AIEditor } from "./screens/AIEditor";
 import { Export } from "./screens/Export";
 import { Settings as SettingsScreen } from "./screens/Settings";
+
+function CursorGlow() {
+    const ref = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        const onMove = (e: MouseEvent) => {
+            if (!ref.current) return;
+            ref.current.style.left = `${e.clientX}px`;
+            ref.current.style.top = `${e.clientY}px`;
+        };
+        window.addEventListener("mousemove", onMove);
+        return () => window.removeEventListener("mousemove", onMove);
+    }, []);
+    return (
+        <div
+            ref={ref}
+            style={{
+                position: "fixed",
+                pointerEvents: "none",
+                zIndex: 9999,
+                width: 380,
+                height: 380,
+                borderRadius: "50%",
+                background: "radial-gradient(circle, rgba(210,160,255,0.15) 0%, rgba(168,85,247,0.05) 45%, transparent 70%)",
+                transform: "translate(-50%, -50%)",
+                mixBlendMode: "screen",
+                left: -9999,
+                top: -9999,
+            }}
+        />
+    );
+}
 
 function AppRoutes({ settings, onWizardDone }: { settings: Settings; onWizardDone: () => void }) {
     const complete = wizardComplete(settings);
@@ -98,6 +129,7 @@ function App() {
 
     return (
         <HashRouter>
+            <CursorGlow />
             <ConnectionProvider>
                 <ProjectProvider>
                     <AppRoutes settings={effective} onWizardDone={handleWizardDone} />
