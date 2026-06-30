@@ -120,6 +120,15 @@ def apply_chain(params: dict) -> dict:
     color_split_in_chain = any(e.get("type") == "color_split" for e in edits)
     bisect_in_chain = any(e.get("type") == "bisect" for e in edits)
 
+    # Raw Meshy geometry is non-manifold; bisect's fill_holes cap only works on
+    # a watertight source. Auto-inject voxel_remesh + fix_normals when they are
+    # absent so the user never has to mention cleanup explicitly.
+    if bisect_in_chain and not any(e.get("type") == "voxel_remesh" for e in edits):
+        edits = list(edits) + [
+            {"type": "voxel_remesh", "voxel_mm": 0.8},
+            {"type": "fix_normals"},
+        ]
+
     errors: list[str] = []
 
     # Wrap the whole chain in one persistent BlenderMCP connection. The

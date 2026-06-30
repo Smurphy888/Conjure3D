@@ -71,7 +71,7 @@ export function ThreePreview({ src, height = 400 }: ThreePreviewProps) {
     const url = convertFileSrc(src);
 
     return (
-        <div style={{ width: "100%", height, position: "relative", background: "#f5f5f5" }}>
+        <div style={{ width: "100%", height, position: "relative", background: "#f5f5f5", borderRadius: 12, overflow: "hidden" }}>
             {/* Visible loading hint; the Canvas paints over it once the model
                 renders. If load fails, the error boundary replaces everything. */}
             <div
