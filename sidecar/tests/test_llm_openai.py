@@ -82,6 +82,17 @@ def test_validate_network_error_distinct(monkeypatch):
     assert "reach" in str(ei.value).lower()
 
 
+def test_generate_strips_stray_root_fields():
+    # Regression: cloud LLMs sometimes put edit fields at the JSON root alongside
+    # "edits" — e.g. {"type":"scale_to_longest","target_mm":200,"edits":[...]}.
+    # EditChain has extra="forbid", so those stray keys caused a ValidationError.
+    # _to_chain_dict must strip them and recover successfully.
+    stray = '{"type":"scale_to_longest","target_mm":200,"edits":[{"type":"bisect","axis":"z"}]}'
+    with patch("requests.post", return_value=_chat(stray)):
+        chain = _backend().generate("split in half")
+    assert [e.type for e in chain.edits] == ["bisect"]
+
+
 def test_name_includes_model():
     assert _backend().name == "openai:gpt-4o-mini"
 

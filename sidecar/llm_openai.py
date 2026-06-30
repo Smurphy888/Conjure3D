@@ -77,6 +77,31 @@ def _extract_json_object(text: str) -> str:
     raise ValueError("model output had an unbalanced JSON object")
 
 
+def _to_chain_dict(text: str) -> dict:
+    """Extract + sanitise the JSON object from a model reply.
+
+    Cloud models (no GBNF constraint) sometimes place edit fields at the JSON
+    root alongside "edits" — e.g. {"type":"scale_to_longest","target_mm":200,
+    "edits":[...]}. EditChain has extra="forbid", so those stray root fields
+    cause a Pydantic validation error. We isolate just {"edits":[...]} before
+    handing to validate_chain, silently discarding the extraneous keys.
+    Raises ValueError on any parse or structural failure — the retry loop in
+    generate() treats ValueError the same as ValidationError.
+    """
+    import json
+
+    raw = _extract_json_object(text)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Model reply is not valid JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ValueError("Model returned a non-object JSON value")
+    if "edits" not in data:
+        raise ValueError("JSON object has no 'edits' key")
+    return {"edits": data["edits"]}
+
+
 class OpenAIBackend:
     """Cloud Backend talking directly to api.openai.com."""
 
@@ -178,7 +203,7 @@ class OpenAIBackend:
         for attempt in range(2):
             content = self._chat(messages)
             try:
-                return validate_chain(_extract_json_object(content))
+                return validate_chain(_to_chain_dict(content))
             except Exception as exc:
                 last_err = exc
                 messages = messages + [
