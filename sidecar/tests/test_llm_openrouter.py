@@ -125,6 +125,37 @@ def test_generate_accepts_alternative_key_operations():
     assert chain.edits[0].type == "scale_to_longest"
 
 
+def test_generate_unwraps_nested_object_wrapper():
+    # Model wraps the whole chain one level deep, e.g. {"edit_chain":{...}}.
+    # _recover_edits unwraps single-key wrappers and recurses.
+    nested = '{"edit_chain":{"edits":[{"type":"keep_largest"}]}}'
+    with patch("requests.post", return_value=_chat(nested)):
+        chain = _backend().generate("keep the largest piece")
+    assert [e.type for e in chain.edits] == ["keep_largest"]
+
+
+def test_generate_recovers_arbitrary_collection_key():
+    # A list of edit-shaped dicts under a key we don't enumerate ("plan" IS
+    # enumerated, so use something off-list to exercise the value-scan branch).
+    weird = '{"the_chain":[{"type":"fix_normals"},{"type":"keep_largest"}]}'
+    with patch("requests.post", return_value=_chat(weird)):
+        chain = _backend().generate("clean it up")
+    assert [e.type for e in chain.edits] == ["fix_normals", "keep_largest"]
+
+
+def test_to_chain_dict_error_names_the_offending_shape():
+    # Regression for the qwen-coder malformed-quote reply
+    # {"edits:[{type":...} — valid JSON, but the junk key means no edits are
+    # recoverable. The error MUST surface the actual keys so the failure is
+    # self-diagnosing from the UI/log instead of an opaque "no edits key".
+    broken = '{"edits:[{type":"scale_to_longest","target_mm":256}'
+    with pytest.raises(ValueError) as ei:
+        orouter._to_chain_dict(broken)
+    msg = str(ei.value)
+    assert "top-level keys" in msg
+    assert "edits:[{type" in msg
+
+
 def test_extract_balanced_object_ignores_braces_in_strings():
     nested = 'prefix {"edits":[{"type":"keep_largest"}]} suffix'
     assert (

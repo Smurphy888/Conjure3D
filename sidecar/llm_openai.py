@@ -13,6 +13,7 @@ Key in Windows Credential Manager (service ``conjure3d``, account
 from __future__ import annotations
 
 import re
+import sys
 
 import keyring
 
@@ -77,23 +78,63 @@ def _extract_json_object(text: str) -> str:
     raise ValueError("model output had an unbalanced JSON object")
 
 
+# Collection keys a cloud model might use instead of "edits", in priority
+# order. The first one whose value is a list wins.
+_COLLECTION_KEYS = ("edits", "operations", "chain", "steps", "ops", "actions", "plan")
+
+
+def _recover_edits(data, _depth: int = 0):
+    """Return the edits *list* from a parsed model reply, or None if it can't
+    be recovered. General by design — handles arbitrary collection-key names,
+    a bare single edit, a top-level array, and one or more levels of object
+    nesting ({"edit_chain": {"edits": [...]}}).
+
+    It deliberately does NOT fabricate an edit from ambiguous data such as
+    op-name-as-key ({"scale_to_longest": {...}}) or bare params
+    ({"target_mm": 200}): silently applying a guessed geometry op is worse
+    than a clean, visible failure the user can rephrase.
+    """
+    if _depth > 4:
+        return None
+    # A bare list at the root already IS the edits array.
+    if isinstance(data, list):
+        return data
+    if not isinstance(data, dict):
+        return None
+    # Known collection key with a list value.
+    for key in _COLLECTION_KEYS:
+        if isinstance(data.get(key), list):
+            return data[key]
+    # The dict is itself one edit (carries the discriminator field).
+    if "type" in data:
+        return [data]
+    # Any value that's a non-empty list of edit-shaped dicts, under any key.
+    for val in data.values():
+        if (
+            isinstance(val, list)
+            and val
+            and all(isinstance(x, dict) and "type" in x for x in val)
+        ):
+            return val
+    # Single-key wrapper, e.g. {"response": {...}} / {"edit_chain": {...}} —
+    # unwrap one level and recurse.
+    if len(data) == 1:
+        only = next(iter(data.values()))
+        if isinstance(only, (dict, list)):
+            return _recover_edits(only, _depth + 1)
+    return None
+
+
 def _to_chain_dict(text: str) -> dict:
-    """Extract + sanitise the JSON object from a model reply.
+    """Extract + sanitise the JSON object from a model reply into
+    {"edits": [...]} ready for validate_chain.
 
-    Cloud models (no GBNF grammar) produce several common mis-shapes that we
-    recover from before handing to validate_chain:
-
-      1. Correct shape — pass through (strip stray root fields):
-           {"type":"X","target_mm":200,"edits":[...]}  →  {"edits":[...]}
-
-      2. Single edit without the array wrapper:
-           {"type":"scale_to_longest","target_mm":150}  →  {"edits":[that dict]}
-
-      3. Alternative key names (operations, chain, steps):
-           {"operations":[...]}  →  {"edits":[...]}
-
-    Raises ValueError on any parse or structural failure so the generate()
-    retry loop feeds the error back to the model and tries once more.
+    Cloud models (no GBNF grammar) wrap the list under varying keys, drop the
+    array wrapper for a single op, or nest the whole thing one level deep;
+    _recover_edits absorbs all of those. On an unrecoverable reply we raise a
+    ValueError that INCLUDES the offending shape (top-level keys + a truncated
+    raw dump) so the failure is self-diagnosing from the UI/log instead of an
+    opaque "no edits key" — and so the generate() retry loop can feed it back.
     """
     import json
 
@@ -101,27 +142,18 @@ def _to_chain_dict(text: str) -> dict:
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise ValueError(f"Model reply is not valid JSON: {exc}") from exc
-    if not isinstance(data, dict):
-        raise ValueError("Model returned a non-object JSON value")
+        raise ValueError(
+            f"Model reply is not valid JSON: {exc}. Raw: {raw[:200]}"
+        ) from exc
 
-    # Case 1 / stray-root-field variant: has "edits" key → isolate it.
-    if "edits" in data:
-        return {"edits": data["edits"]}
-
-    # Case 2: model returned a single edit dict without the array wrapper.
-    # Detect by presence of "type" (the discriminator field every op has).
-    if "type" in data:
-        return {"edits": [data]}
-
-    # Case 3: model used an alternative collection key.
-    for alt in ("operations", "chain", "steps"):
-        if alt in data and isinstance(data[alt], list):
-            return {"edits": data[alt]}
-
-    raise ValueError(
-        "JSON object has no 'edits' key and doesn't look like a single edit op"
-    )
+    edits = _recover_edits(data)
+    if edits is None:
+        keys = sorted(data.keys()) if isinstance(data, dict) else "(not an object)"
+        raise ValueError(
+            f"Could not find an edits array in the model reply "
+            f"(top-level keys: {keys}; raw: {raw[:200]})"
+        )
+    return {"edits": edits}
 
 
 class OpenAIBackend:
@@ -224,6 +256,13 @@ class OpenAIBackend:
 
         for attempt in range(2):
             content = self._chat(messages)
+            # Log the raw reply (model output, never the key) so any future
+            # mis-shape is diagnosable from the session log without a repro.
+            print(
+                f"[openai] attempt {attempt + 1} raw reply: {content!r}",
+                file=sys.stderr,
+                flush=True,
+            )
             try:
                 return validate_chain(_to_chain_dict(content))
             except Exception as exc:

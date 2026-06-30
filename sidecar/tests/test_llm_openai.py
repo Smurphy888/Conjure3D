@@ -112,6 +112,34 @@ def test_generate_accepts_alternative_key_operations():
     assert chain.edits[0].type == "scale_to_longest"
 
 
+def test_generate_unwraps_nested_object_wrapper():
+    # Model wraps the whole chain one level deep, e.g. {"edit_chain":{...}}.
+    nested = '{"edit_chain":{"edits":[{"type":"keep_largest"}]}}'
+    with patch("requests.post", return_value=_chat(nested)):
+        chain = _backend().generate("keep the largest piece")
+    assert [e.type for e in chain.edits] == ["keep_largest"]
+
+
+def test_generate_recovers_arbitrary_collection_key():
+    # A list of edit-shaped dicts under an un-enumerated key exercises the
+    # value-scan branch of _recover_edits.
+    weird = '{"the_chain":[{"type":"fix_normals"},{"type":"keep_largest"}]}'
+    with patch("requests.post", return_value=_chat(weird)):
+        chain = _backend().generate("clean it up")
+    assert [e.type for e in chain.edits] == ["fix_normals", "keep_largest"]
+
+
+def test_to_chain_dict_error_names_the_offending_shape():
+    # Malformed-quote reply that is valid JSON but yields a junk key. The
+    # error MUST surface the actual keys so the failure is self-diagnosing.
+    broken = '{"edits:[{type":"scale_to_longest","target_mm":256}'
+    with pytest.raises(ValueError) as ei:
+        oai._to_chain_dict(broken)
+    msg = str(ei.value)
+    assert "top-level keys" in msg
+    assert "edits:[{type" in msg
+
+
 def test_name_includes_model():
     assert _backend().name == "openai:gpt-4o-mini"
 
