@@ -106,6 +106,25 @@ def test_generate_strips_stray_root_fields():
     assert [e.type for e in chain.edits] == ["bisect"]
 
 
+def test_generate_wraps_single_edit_without_array():
+    # Regression: model returns a bare edit object with no "edits" wrapper —
+    # e.g. {"type":"scale_to_longest","target_mm":150} — when the user asks for
+    # a single change. _to_chain_dict must wrap it in a list automatically.
+    single = '{"type":"scale_to_longest","target_mm":150}'
+    with patch("requests.post", return_value=_chat(single)):
+        chain = _backend().generate("scale to 150mm")
+    assert len(chain.edits) == 1
+    assert chain.edits[0].type == "scale_to_longest"
+
+
+def test_generate_accepts_alternative_key_operations():
+    # Model uses "operations" instead of "edits" as the collection key.
+    alt = '{"operations":[{"type":"scale_to_longest","target_mm":100}]}'
+    with patch("requests.post", return_value=_chat(alt)):
+        chain = _backend().generate("scale to 100mm")
+    assert chain.edits[0].type == "scale_to_longest"
+
+
 def test_extract_balanced_object_ignores_braces_in_strings():
     nested = 'prefix {"edits":[{"type":"keep_largest"}]} suffix'
     assert (

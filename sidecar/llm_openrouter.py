@@ -101,13 +101,20 @@ def _extract_json_object(text: str) -> str:
 def _to_chain_dict(text: str) -> dict:
     """Extract + sanitise the JSON object from a model reply.
 
-    Cloud models (no GBNF constraint) sometimes place edit fields at the JSON
-    root alongside "edits" — e.g. {"type":"scale_to_longest","target_mm":200,
-    "edits":[...]}. EditChain has extra="forbid", so those stray root fields
-    cause a Pydantic validation error. We isolate just {"edits":[...]} before
-    handing to validate_chain, silently discarding the extraneous keys.
-    Raises ValueError on any parse or structural failure — the retry loop in
-    generate() treats ValueError the same as ValidationError.
+    Cloud models (no GBNF grammar) produce several common mis-shapes that we
+    recover from before handing to validate_chain:
+
+      1. Correct shape — pass through (strip stray root fields):
+           {"type":"X","target_mm":200,"edits":[...]}  →  {"edits":[...]}
+
+      2. Single edit without the array wrapper:
+           {"type":"scale_to_longest","target_mm":150}  →  {"edits":[that dict]}
+
+      3. Alternative key names (operations, chain, steps):
+           {"operations":[...]}  →  {"edits":[...]}
+
+    Raises ValueError on any parse or structural failure so the generate()
+    retry loop feeds the error back to the model and tries once more.
     """
     import json
 
@@ -118,9 +125,24 @@ def _to_chain_dict(text: str) -> dict:
         raise ValueError(f"Model reply is not valid JSON: {exc}") from exc
     if not isinstance(data, dict):
         raise ValueError("Model returned a non-object JSON value")
-    if "edits" not in data:
-        raise ValueError("JSON object has no 'edits' key")
-    return {"edits": data["edits"]}
+
+    # Case 1 / stray-root-field variant: has "edits" key → isolate it.
+    if "edits" in data:
+        return {"edits": data["edits"]}
+
+    # Case 2: model returned a single edit dict without the array wrapper.
+    # Detect by presence of "type" (the discriminator field every op has).
+    if "type" in data:
+        return {"edits": [data]}
+
+    # Case 3: model used an alternative collection key.
+    for alt in ("operations", "chain", "steps"):
+        if alt in data and isinstance(data[alt], list):
+            return {"edits": data[alt]}
+
+    raise ValueError(
+        "JSON object has no 'edits' key and doesn't look like a single edit op"
+    )
 
 
 class OpenRouterBackend:
