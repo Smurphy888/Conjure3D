@@ -102,6 +102,7 @@ export function deserializeProject(raw: unknown): DeserializeResult {
         objectType: (doc.object_type as ProjectState["objectType"]) ?? "vase",
         colorSplitMode:
             (doc.color_split_mode as ProjectState["colorSplitMode"]) ?? "none",
+        bisectInChain: false,
         editApplied: Boolean((doc.edits as Edit[] | undefined)?.length),
         prebaked3mfPath: null,
     };

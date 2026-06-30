@@ -15,6 +15,7 @@ const state: ProjectState = {
     lastSanity: null,
     objectType: "vase",
     colorSplitMode: "zebra",
+    bisectInChain: false,
     editApplied: true,
     prebaked3mfPath: null,
 };
