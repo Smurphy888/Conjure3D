@@ -81,6 +81,7 @@ try {
     # symptom this whole Python-3.12 migration is meant to eliminate.
     & $venvPython -m PyInstaller `
         --onefile `
+        --noconsole `
         --name sidecar `
         --distpath dist `
         --workpath build `

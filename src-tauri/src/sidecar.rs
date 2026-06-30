@@ -6,6 +6,13 @@ use std::process::{Child, ChildStdin, Stdio};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+// Prevents a black console window from appearing when the sidecar (a
+// PyInstaller --onefile exe) is spawned as a child process on Windows.
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 pub struct SidecarState {
     stdin: ChildStdin,
     stdout: BufReader<std::process::ChildStdout>,
@@ -49,29 +56,35 @@ impl SidecarState {
 
         // Use arg list, never a shell string — apostrophe in the path is safe.
         let mut child = match exe_path {
-            Some(exe) => std::process::Command::new(exe)
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::from(
-                    log_file
-                        .try_clone()
-                        .map_err(|e| format!("log handle clone: {e}"))?,
-                ))
-                .spawn()
-                .map_err(|e| format!("Failed to spawn sidecar exe: {e}"))?,
+            Some(exe) => {
+                let mut cmd = std::process::Command::new(exe);
+                cmd.stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::from(
+                        log_file
+                            .try_clone()
+                            .map_err(|e| format!("log handle clone: {e}"))?,
+                    ));
+                #[cfg(windows)]
+                cmd.creation_flags(CREATE_NO_WINDOW);
+                cmd.spawn()
+                    .map_err(|e| format!("Failed to spawn sidecar exe: {e}"))?
+            }
             None => {
                 let script =
                     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../sidecar/main.py");
-                std::process::Command::new("python")
-                    .arg(&script)
+                let mut cmd = std::process::Command::new("python");
+                cmd.arg(&script)
                     .stdin(Stdio::piped())
                     .stdout(Stdio::piped())
                     .stderr(Stdio::from(
                         log_file
                             .try_clone()
                             .map_err(|e| format!("log handle clone: {e}"))?,
-                    ))
-                    .spawn()
+                    ));
+                #[cfg(windows)]
+                cmd.creation_flags(CREATE_NO_WINDOW);
+                cmd.spawn()
                     .map_err(|e| format!("Failed to spawn sidecar via python: {e}"))?
             }
         };
