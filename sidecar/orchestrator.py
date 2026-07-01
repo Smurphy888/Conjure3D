@@ -42,6 +42,7 @@ from ops import (
     export_3mf,
     sanity as sanity_op,
     normalize,
+    separate_loose,
     voxel_remesh,
     keep_largest,
     fix_normals,
@@ -54,16 +55,17 @@ from ops import (
 # Lower rank runs first. Unknown types sort last (and are reported).
 CANONICAL_ORDER = {
     "scale_to_longest": 1,
-    "voxel_remesh": 2,
-    "keep_largest": 3,
-    "recenter_xy": 4,
-    "flat_bottom": 5,
-    "fix_normals": 6,
-    "decimate": 7,
-    "open_top": 8,
-    "bridge_top_loops": 9,
-    "color_split": 10,
-    "bisect": 11,
+    "separate_loose": 2,
+    "voxel_remesh": 3,
+    "keep_largest": 4,
+    "recenter_xy": 5,
+    "flat_bottom": 6,
+    "fix_normals": 7,
+    "decimate": 8,
+    "open_top": 9,
+    "bridge_top_loops": 10,
+    "color_split": 11,
+    "bisect": 12,
 }
 
 _FAILED_SANITY = {
@@ -79,6 +81,8 @@ def _run_edit(edit: dict, object_type: str):
     t = edit.get("type")
     if t == "scale_to_longest":
         return normalize.scale_to_longest(float(edit["target_mm"]))
+    if t == "separate_loose":
+        return separate_loose.run()
     if t == "voxel_remesh":
         return voxel_remesh.run(float(edit.get("voxel_mm", 0.8)))
     if t == "keep_largest":
@@ -119,6 +123,7 @@ def apply_chain(params: dict) -> dict:
     )
     color_split_in_chain = any(e.get("type") == "color_split" for e in edits)
     bisect_in_chain = any(e.get("type") == "bisect" for e in edits)
+    separate_loose_in_chain = any(e.get("type") == "separate_loose" for e in edits)
 
     # Raw Meshy geometry is non-manifold; bisect's fill_holes cap only works on
     # a watertight source. Auto-inject voxel_remesh + fix_normals when they are
@@ -172,14 +177,18 @@ def apply_chain(params: dict) -> dict:
                     # manifold flag and users assume the chain failed.
                     "manifold": (
                         s["boundary_edges"] == 0 and s["non_manifold_edges"] == 0
-                    ) or color_split_in_chain,
-                    # color_split AND bisect intentionally produce multiple
-                    # components (coloured groups / two cut pieces). manifold is
-                    # NOT relaxed for bisect: a correct cap leaves zero boundary
-                    # edges, so a red manifold flag is the live signal that the
-                    # fill_holes cap failed — masking it would hide a real defect.
+                    ) or color_split_in_chain or separate_loose_in_chain,
+                    # color_split, bisect, and separate_loose all intentionally
+                    # produce multiple components. manifold is NOT relaxed for
+                    # bisect (a correct cap must leave zero boundary edges; a red
+                    # flag signals a real capping defect). It IS relaxed for
+                    # separate_loose because parts that shared seam edges will
+                    # have open boundaries by construction.
                     "single_component": (
-                        s["components"] == 1 or color_split_in_chain or bisect_in_chain
+                        s["components"] == 1
+                        or color_split_in_chain
+                        or bisect_in_chain
+                        or separate_loose_in_chain
                     ),
                     "normals_outward": s["signed_volume"] > 0,
                     "longest_dim_under_limit": (

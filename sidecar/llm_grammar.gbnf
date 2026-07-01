@@ -18,6 +18,7 @@
 root ::= "{" ws "\"edits\"" ws ":" ws "[" ws (edit (ws "," ws edit)*)? ws "]" ws "}"
 
 edit ::= edit-scale
+       | edit-separate-loose
        | edit-voxel
        | edit-keep-largest
        | edit-recenter
@@ -35,6 +36,8 @@ edit ::= edit-scale
 
 edit-scale ::= "{" ws "\"type\"" ws ":" ws "\"scale_to_longest\"" ws "," ws
                 "\"target_mm\"" ws ":" ws number ws "}"
+
+edit-separate-loose ::= "{" ws "\"type\"" ws ":" ws "\"separate_loose\"" ws "}"
 
 edit-voxel ::= "{" ws "\"type\"" ws ":" ws "\"voxel_remesh\""
                 (ws "," ws "\"voxel_mm\"" ws ":" ws number)? ws "}"
