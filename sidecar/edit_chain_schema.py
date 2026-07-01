@@ -45,6 +45,7 @@ from pydantic import BaseModel, ConfigDict, Field
 # without duplicating the truth in two places.
 CANONICAL_ORDER: tuple[str, ...] = (
     "scale_to_longest",
+    "separate_loose",
     "voxel_remesh",
     "keep_largest",
     "recenter_xy",
@@ -133,6 +134,15 @@ class ColorSplit(_EditBase):
     count: int = Field(default=8, ge=2, le=32)
 
 
+class SeparateLoose(_EditBase):
+    """Split every mesh object into its disconnected geometry islands. Useful
+    for Meshy character exports where limbs are loose sub-meshes bundled in one
+    object. Must run BEFORE voxel_remesh (canonical slot 2) — voxel_remesh
+    merges loose parts and would leave nothing to separate."""
+
+    type: Literal["separate_loose"]
+
+
 class Bisect(_EditBase):
     """Physically cut every current mesh piece in half with a single plane at
     the midpoint of the chosen axis. ``axis='z'`` (default) is a horizontal
@@ -154,6 +164,7 @@ class Bisect(_EditBase):
 Edit = Annotated[
     Union[
         ScaleToLongest,
+        SeparateLoose,
         VoxelRemesh,
         KeepLargest,
         RecenterXY,

@@ -79,6 +79,7 @@ const OP_SPECS: readonly OpSpec[] = [
         fields: [{ key: "target_mm", label: "Target (mm)", min: 1, max: 300, step: 1 }],
         defaults: { type: "scale_to_longest", target_mm: 80 },
     },
+    { type: "separate_loose", label: "Separate into parts", fields: [], defaults: { type: "separate_loose" } },
     {
         type: "voxel_remesh",
         label: "Voxel remesh (watertight)",

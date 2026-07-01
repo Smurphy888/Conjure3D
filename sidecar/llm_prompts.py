@@ -50,6 +50,14 @@ _EDIT_CATALOGUE: list[tuple[str, str, str]] = [
         '{"type":"scale_to_longest","target_mm":<float 1–300>}',
     ),
     (
+        "separate_loose",
+        "Separate into parts — split the model into its individual disconnected "
+        "pieces (e.g. head, torso, arms, legs on a character). Only works when "
+        "the source mesh has loose sub-meshes; do NOT combine with voxel_remesh "
+        "(remesh merges loose parts before separation can happen)",
+        '{"type":"separate_loose"}',
+    ),
+    (
         "voxel_remesh",
         "rebuild as a watertight voxel mesh; cures non-manifold + mesh-soup input",
         '{"type":"voxel_remesh","voxel_mm":<float 0.1–10, default 0.8>}',
@@ -177,6 +185,15 @@ EXAMPLES: list[tuple[str, dict]] = [
                 {"type": "decimate", "target_faces": 50000},
                 {"type": "bisect", "axis": "z"},
                 {"type": "bisect", "axis": "x"},
+            ]
+        },
+    ),
+    (
+        '"separate the character into individual parts by limbs"',
+        {
+            "edits": [
+                {"type": "scale_to_longest", "target_mm": 100},
+                {"type": "separate_loose"},
             ]
         },
     ),
