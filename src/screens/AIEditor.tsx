@@ -511,7 +511,7 @@ export function AIEditor() {
                     </div>
                 </div>
 
-                {/* Right panel: viewport + sanity */}
+                {/* Right panel: viewport + sanity + nav anchored below the flags */}
                 <div style={{ flex: 1, minWidth: 300 }}>
                     {currentGlbPath ? (
                         <ThreePreview key={applyVersion} src={currentGlbPath} height={400} />
@@ -519,34 +519,13 @@ export function AIEditor() {
                         <p style={{ color: "orange" }}>No model loaded.</p>
                     )}
                     {lastSanity && <SanityPanel sanity={lastSanity} />}
+                    <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
+                        <button onClick={() => navigate("/preview-pick")}>Back</button>
+                        <button onClick={() => navigate("/export")} disabled={!sanityOk}>
+                            Next (Export)
+                        </button>
+                    </div>
                 </div>
-            </div>
-
-            {/*
-              Sticky bottom nav — Back / Next stay visible at the bottom of
-              the viewport no matter how tall the chain panel grows. This is
-              belt-and-braces: even after the styles.css overflow fix lets
-              the page scroll properly, the user shouldn't have to hunt for
-              the primary navigation. The right padding leaves clearance
-              for the fixed connection badge at bottom-right.
-            */}
-            <div
-                style={{
-                    position: "sticky",
-                    bottom: 0,
-                    marginTop: "1rem",
-                    padding: "0.75rem 0",
-                    paddingRight: "10rem",
-                    background: "linear-gradient(to top, rgba(15,15,15,1) 70%, rgba(15,15,15,0))",
-                    width: "min(1100px, 100%)",
-                    zIndex: 50,
-                }}
-            >
-                <button onClick={() => navigate("/preview-pick")}>Back</button>
-                {" "}
-                <button onClick={() => navigate("/export")} disabled={!sanityOk}>
-                    Next (Export)
-                </button>
             </div>
         </div>
     );
