@@ -134,12 +134,12 @@ class ColorSplit(_EditBase):
 
 
 class Bisect(_EditBase):
-    """Physically cut the mesh into TWO separate, watertight pieces with a
-    single plane at the midpoint of the chosen axis. ``axis='z'`` (default)
-    is a horizontal cut (top + bottom halves); 'x'/'y' are vertical cuts.
-    Unlike color_split this separates geometry rather than assigning filaments;
-    like color_split it intentionally yields multiple components (the
-    orchestrator relaxes single_component when a bisect is present)."""
+    """Physically cut every current mesh piece in half with a single plane at
+    the midpoint of the chosen axis. ``axis='z'`` (default) is a horizontal
+    cut; 'x'/'y' are vertical cuts. Two bisect ops chain: bisect(z) then
+    bisect(x) yields 4 watertight quarters. Unlike color_split this separates
+    geometry rather than assigning filaments; the orchestrator relaxes
+    single_component when bisect is present."""
 
     type: Literal["bisect"]
     axis: Literal["x", "y", "z"] = "z"

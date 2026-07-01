@@ -1,15 +1,18 @@
 """
-Bisect — cut the mesh with a single plane into two separate, watertight
-pieces. This is the "split it in half" operation: unlike color_split (which
-assigns filaments), bisect physically separates the model into two objects a
-user can print and assemble.
+Bisect — cut every mesh in the scene with a single plane, producing two
+watertight pieces per input object. Unlike color_split (which assigns
+filaments), bisect physically separates the model so the user can print and
+assemble the parts.
+
+Chaining: two bisect ops produce 4 pieces (e.g. bisect(z) then bisect(x)
+gives top-left, top-right, bottom-left, bottom-right quarters). Each pass
+operates on ALL current mesh objects using the combined bounding-box midpoint
+as the cut plane, so every piece is cut at the same coordinate as the original.
 
 axis:
   "z" (default) — horizontal plane at mid-height → top half + bottom half
   "x"           — vertical plane → left/right halves
   "y"           — vertical plane → front/back halves
-
-The cut plane sits at the midpoint of the chosen axis's world bounding box.
 
 Capping the cut face:
   Each half is bisected with use_fill=False (no auto n-gon), then the open
@@ -23,8 +26,8 @@ Capping the cut face:
 Sanity contract (see orchestrator):
   A clean cap leaves ZERO boundary edges, so `manifold` stays strict — a bad
   cap correctly shows manifold ✗ rather than being masked. Only
-  `single_component` is relaxed when bisect is in the chain, because two pieces
-  is the intended result.
+  `single_component` is relaxed when bisect is in the chain, because multiple
+  pieces is the intended result.
 """
 import json
 
@@ -36,7 +39,10 @@ _AXES = ("x", "y", "z")
 
 def run(axis: str = Z, timeout: float = HEAVY_TIMEOUT) -> dict:
     """
-    Returns {"objects": 2, "axis": axis, "cut_at_mm": <float>}.
+    Returns {"objects": <N*2>, "axis": axis, "cut_at_mm": <float>}.
+
+    Operates on ALL mesh objects in the scene so that chained bisects work:
+    bisect(z) then bisect(x) → 4 pieces, not 3.
 
     Raises ValueError for an unknown axis (defence in depth — the schema +
     grammar already constrain it).
@@ -55,18 +61,19 @@ from mathutils import Vector
 AXIS = {axis!r}
 IDX = {{"x": 0, "y": 1, "z": 2}}[AXIS]
 
-src = bpy.context.view_layer.objects.active
-if src is None or src.type != 'MESH':
-    src = next((o for o in bpy.context.scene.objects if o.type == 'MESH'), None)
-    if src is None:
-        raise RuntimeError("bisect: no mesh object in scene")
+# Collect ALL mesh objects. A prior bisect may have already split the model
+# into 2+ pieces; each must be cut so that e.g. bisect(z) then bisect(x)
+# yields 4 pieces, not 3 (the bug where only the active half was touched).
+meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+if not meshes:
+    raise RuntimeError("bisect: no mesh objects in scene")
 
-# Cut plane at the midpoint of the chosen axis, in WORLD coordinates
-# (bpy.ops.mesh.bisect takes world-space plane_co/plane_no — same convention
-# color_split._slab relies on).
-cs = [src.matrix_world @ Vector(c) for c in src.bound_box]
-lo = min(v[IDX] for v in cs)
-hi = max(v[IDX] for v in cs)
+# Cut plane at the midpoint of the COMBINED bounding box (world space).
+# Using the union bbox means an x cut after a z cut still bisects both halves
+# at the same lateral midline as the original model.
+all_corners = [o.matrix_world @ Vector(c) for o in meshes for c in o.bound_box]
+lo = min(v[IDX] for v in all_corners)
+hi = max(v[IDX] for v in all_corners)
 mid = (lo + hi) / 2.0
 plane_co = tuple(mid if i == IDX else 0.0 for i in range(3))
 plane_no = tuple(1.0 if i == IDX else 0.0 for i in range(3))
@@ -101,14 +108,17 @@ def _half(obj, keep_positive):
     bpy.ops.object.mode_set(mode='OBJECT')
 
 
-a = _dup(src, "Conjure_HalfA")
-_half(a, keep_positive=True)
-b = _dup(src, "Conjure_HalfB")
-_half(b, keep_positive=False)
-bpy.data.objects.remove(src, do_unlink=True)
+result_count = 0
+for src in list(meshes):  # snapshot list — scene changes during iteration
+    a = _dup(src, src.name + "_A")
+    _half(a, keep_positive=True)
+    b = _dup(src, src.name + "_B")
+    _half(b, keep_positive=False)
+    bpy.data.objects.remove(src, do_unlink=True)
+    result_count += 2
 
 print(json.dumps({{
-    "objects": 2, "axis": AXIS, "cut_at_mm": mid * 1000.0,
+    "objects": result_count, "axis": AXIS, "cut_at_mm": mid * 1000.0,
 }}))
 """
 

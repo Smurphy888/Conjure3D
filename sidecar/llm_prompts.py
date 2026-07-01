@@ -165,6 +165,21 @@ EXAMPLES: list[tuple[str, dict]] = [
             ]
         },
     ),
+    (
+        '"split into quarters — cut on z and x axis"',
+        {
+            "edits": [
+                {"type": "scale_to_longest", "target_mm": 80},
+                {"type": "voxel_remesh", "voxel_mm": 0.8},
+                {"type": "keep_largest"},
+                {"type": "recenter_xy"},
+                {"type": "fix_normals"},
+                {"type": "decimate", "target_faces": 50000},
+                {"type": "bisect", "axis": "z"},
+                {"type": "bisect", "axis": "x"},
+            ]
+        },
+    ),
 ]
 
 
