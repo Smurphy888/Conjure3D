@@ -51,6 +51,7 @@ from edit_chain_schema import (
     OpenTop,
     RecenterXY,
     ScaleToLongest,
+    SeparateLoose,
     VoxelRemesh,
 )
 
@@ -120,6 +121,16 @@ _BISECT_KEYWORDS = (
 # Words that mean a vertical cut plane (left/right) rather than the default
 # horizontal (top/bottom) one.
 _BISECT_VERTICAL_KEYWORDS = ("vertical", "left and right", "left/right", "side to side", "side-to-side")
+# Splitting into individual disconnected parts (limbs, components). Checked
+# BEFORE the bisect scan — "separate into parts" must NOT fall through to bisect.
+_SEPARATE_LOOSE_KEYWORDS = (
+    "separate into parts", "separate by parts", "separate parts",
+    "split into parts", "split into individual", "split by limbs",
+    "separate by limbs", "separate limbs", "by limbs",
+    "individual parts", "individual pieces", "loose parts",
+    "separate the character", "separate into individual",
+    "into separate pieces", "into separate parts",
+)
 _FLAT_BOTTOM_KEYWORDS = ("flat bottom", "flat base", "stable", "sit flat", "flatten the base")
 _LIGHT_KEYWORDS = ("light", "lighter", "less detail", "low poly", "simpler", "lower poly")
 _DETAIL_KEYWORDS = ("detail", "detailed", "preserve", "high poly", "fine")
@@ -201,6 +212,10 @@ class MockBackend:
         target_mm = _detect_target_mm(text, default=80.0)
         skip_clean = _matches_any(text, _NO_CLEAN_KEYWORDS)
         vase_like = object_type == "vase" or _matches_any(text, _VASE_KEYWORDS)
+        # Separate-into-parts check runs FIRST — it catches "separate into parts"
+        # / "split into individual" / "by limbs" etc. before the bisect scan can
+        # grab them (bisect keywords include "separate pieces" which is close).
+        wants_separate_loose = _matches_any(text, _SEPARATE_LOOSE_KEYWORDS)
         # Negation guard must be checked before the color keyword scan so that
         # "single color" / "solid color" / etc. don't false-positive on the
         # bare "color" needle in _COLOR_SPLIT_KEYWORDS.
@@ -208,7 +223,8 @@ class MockBackend:
         # A physical bisect ("cut in half") is mutually exclusive with a colour
         # split — combining them would feed color_split two objects. Bisect wins
         # when explicitly requested, since its phrases are specific.
-        wants_bisect = _matches_any(text, _BISECT_KEYWORDS)
+        # separate_loose also blocks bisect — the two ops are mutually exclusive.
+        wants_bisect = (not wants_separate_loose) and _matches_any(text, _BISECT_KEYWORDS)
         bisect_axis = "x" if _matches_any(text, _BISECT_VERTICAL_KEYWORDS) else "z"
         wants_color = (not wants_bisect) and (not no_color_split) and (
             _matches_any(text, _COLOR_SPLIT_KEYWORDS) or _matches_any(text, _QUARTER_KEYWORDS)
@@ -222,6 +238,15 @@ class MockBackend:
             not skip_clean
             or _matches_any(text, _FLAT_BOTTOM_KEYWORDS)
         )
+
+        # separate_loose is incompatible with voxel_remesh (remesh merges all
+        # loose islands before separation can happen). Return a minimal chain
+        # immediately so none of the standard spine gets appended.
+        if wants_separate_loose:
+            return EditChain(edits=[
+                ScaleToLongest(type="scale_to_longest", target_mm=target_mm),
+                SeparateLoose(type="separate_loose"),
+            ])
 
         # Spine — canonical-clean ops every chain needs.
         edits = [
