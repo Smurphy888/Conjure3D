@@ -24,13 +24,16 @@ Implements LAUNCH_AUDIT.md §1.3. Two independent signing systems are involved
 
 ```powershell
 # from the worktree (node_modules + venv live there)
-$env:TAURI_SIGNING_PRIVATE_KEY_PATH = "$env:USERPROFILE\.tauri\conjure3d_updater.key"
+# NOTE: the bundler wants the key CONTENTS in TAURI_SIGNING_PRIVATE_KEY —
+# the _PATH variant is not honoured by every CLI version.
+$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content "$env:USERPROFILE\.tauri\conjure3d_updater.key" -Raw
 .\scripts\build-sidecar.ps1
 pnpm tauri build
 ```
 
-Without `TAURI_SIGNING_PRIVATE_KEY_PATH` set, the build still produces the
-installer but no `.sig` — fine for local testing, unusable as a release.
+Without `TAURI_SIGNING_PRIVATE_KEY` set, the build fails at the signing step
+once `createUpdaterArtifacts` is on (installer is still produced; only the
+`.sig` step aborts).
 
 ### Publishing a release
 
