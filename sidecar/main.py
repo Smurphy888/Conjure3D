@@ -5,6 +5,7 @@ All diagnostic output goes to stderr; stdout is the protocol channel only.
 import json
 import sys
 import traceback
+import urllib.parse
 import webbrowser
 
 import keyring
@@ -99,7 +100,18 @@ def system_has_meshy_key(_params):
 
 @register("system.open_url")
 def system_open_url(params):
-    webbrowser.open(params["url"])
+    # Only ever hand http(s) URLs to the OS. The webview reaches this command
+    # through the generic invoke_sidecar passthrough, so without a scheme guard
+    # a crafted URL (file://, ms-msdt:, or any registered handler) could be
+    # opened outside the browser. Reject everything that isn't a normal web link.
+    url = params["url"]
+    scheme = urllib.parse.urlparse(url).scheme.lower()
+    if scheme not in ("http", "https"):
+        raise ValueError(
+            f"Refusing to open non-web URL (scheme={scheme!r}); "
+            "only http/https are allowed."
+        )
+    webbrowser.open(url)
     return {"ok": True}
 
 

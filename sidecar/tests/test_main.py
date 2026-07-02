@@ -116,3 +116,44 @@ def test_set_meshy_key_run_loop_integration():
         stdout.seek(0)
         resp = json.loads(stdout.readline())
     assert resp["result"]["ok"] is True
+
+
+# ── system.open_url scheme guard (S1) ──────────────────────────────────────────
+
+def test_open_url_allows_https():
+    with patch("main.webbrowser.open") as mock_open:
+        req = {"jsonrpc": "2.0", "id": 20, "method": "system.open_url",
+               "params": {"url": "https://conjure3d.app/docs"}}
+        resp = dispatch(req)
+    assert resp["result"]["ok"] is True
+    mock_open.assert_called_once_with("https://conjure3d.app/docs")
+
+
+def test_open_url_allows_http():
+    with patch("main.webbrowser.open") as mock_open:
+        req = {"jsonrpc": "2.0", "id": 21, "method": "system.open_url",
+               "params": {"url": "http://localhost:1420/x"}}
+        resp = dispatch(req)
+    assert resp["result"]["ok"] is True
+    mock_open.assert_called_once()
+
+
+def test_open_url_rejects_file_scheme_and_does_not_open():
+    with patch("main.webbrowser.open") as mock_open:
+        req = {"jsonrpc": "2.0", "id": 22, "method": "system.open_url",
+               "params": {"url": "file:///C:/Windows/System32/calc.exe"}}
+        resp = dispatch(req)
+    # ValueError bubbles to the dispatcher's internal-error path; crucially the
+    # OS is never asked to open the non-web URL.
+    assert "error" in resp
+    mock_open.assert_not_called()
+
+
+def test_open_url_rejects_custom_handler_scheme():
+    for bad in ("javascript:alert(1)", "ms-msdt:/id", "vscode://x", "smb://host/share"):
+        with patch("main.webbrowser.open") as mock_open:
+            req = {"jsonrpc": "2.0", "id": 23, "method": "system.open_url",
+                   "params": {"url": bad}}
+            resp = dispatch(req)
+        assert "error" in resp, f"{bad!r} should be rejected"
+        mock_open.assert_not_called()
