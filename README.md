@@ -124,7 +124,8 @@ Optionally remove the BlenderMCP addon from Blender's Edit → Preferences → A
 ## Privacy
 
 - Your prompts and parameters are sent to Meshy.ai (their API).
-- No telemetry, no analytics, no auto-update.
+- No telemetry, no analytics.
+- Conjure3D checks for app updates on startup (see [docs/release-signing.md](docs/release-signing.md)) — this is the only outbound network call not tied to a prompt/generation. Update artifacts are signature-verified before install.
 - Crash logs stay on your machine.
 
 ## Development

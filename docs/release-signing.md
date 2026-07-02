@@ -3,6 +3,22 @@
 Implements LAUNCH_AUDIT.md §1.3. Two independent signing systems are involved
 — don't confuse them:
 
+## Repo layout — source vs. distribution
+
+Conjure3D is closed-source commercial software. Two separate GitHub repos:
+
+| Repo | Visibility | Contents | Remote |
+|---|---|---|---|
+| `Smurphy888/conjure3d` | **Private** | Full source (this repo) | `origin` |
+| `Smurphy888/conjure3d-releases` | **Public** | ONLY compiled installers, `.sig` files, `latest.json` — never source | not cloned locally; published to via `scripts/publish-release.ps1` |
+
+The updater's `endpoints` fetch is a plain unauthenticated `GET` — it only
+works against a **public** repo's releases. Splitting source from
+distribution keeps the private repo private while still giving the updater
+somewhere to fetch from. Never push source, branches, or the private repo's
+git history to `conjure3d-releases` — it should only ever receive Release
+assets via the publish script.
+
 | | Purpose | Key | Status |
 |---|---|---|---|
 | **Updater signing** | The auto-updater verifies each update artifact against a pinned minisign pubkey before installing | `%USERPROFILE%\.tauri\conjure3d_updater.key` (+ `.pub`) | ✅ generated, pubkey pinned in `tauri.conf.json` |
@@ -37,32 +53,32 @@ once `createUpdaterArtifacts` is on (installer is still produced; only the
 
 ### Publishing a release
 
-The endpoint currently configured is a **placeholder** (no git remote exists
-yet): `https://github.com/conjure3d/conjure3d/releases/latest/download/latest.json`.
-When a GitHub repo exists, update the org/name in `tauri.conf.json` and attach
-to each GitHub Release:
+The endpoint in `tauri.conf.json` points at the public releases repo:
+`https://github.com/Smurphy888/conjure3d-releases/releases/latest/download/latest.json`.
 
-1. `Conjure3D_<ver>_x64-setup.exe`
-2. `Conjure3D_<ver>_x64-setup.exe.sig`
-3. `latest.json`:
+Publishing is scripted — `scripts/publish-release.ps1` builds nothing itself,
+it only uploads what `pnpm tauri build` already produced:
 
-```json
-{
-  "version": "0.1.0",
-  "notes": "What changed",
-  "pub_date": "2026-07-02T00:00:00Z",
-  "platforms": {
-    "windows-x86_64": {
-      "signature": "<contents of the .exe.sig file>",
-      "url": "https://github.com/<org>/<repo>/releases/download/v0.1.0/Conjure3D_0.1.0_x64-setup.exe"
-    }
-  }
-}
+```powershell
+# 1. Create a fine-grained PAT at github.com/settings/tokens, scoped to
+#    ONLY Smurphy888/conjure3d-releases, permission "Contents: read/write".
+#    Never scope it to the private conjure3d repo.
+$env:GITHUB_RELEASE_TOKEN = "github_pat_..."
+
+# 2. Publish — reads the installer + .sig from src-tauri/target/release/bundle/nsis/,
+#    creates the GitHub Release, uploads the exe, the .sig, and a generated latest.json.
+.\scripts\publish-release.ps1 -Version "0.1.0" -Notes "What changed in this release"
 ```
 
+The script never touches the private `conjure3d` repo — it only calls the
+GitHub REST API against `conjure3d-releases`. The token lives in an
+environment variable for the duration of the call only; it is never written
+to disk, logged, or committed.
+
 The `version` field must be greater than the installed app's version for the
-chip to appear. Bump `version` in `tauri.conf.json` + `package.json` +
-`src-tauri/Cargo.toml` together per release.
+update chip to appear. Bump `version` in `tauri.conf.json` + `package.json` +
+`src-tauri/Cargo.toml` together per release, and pass the same version to
+`-Version` above.
 
 ## Windows code-signing — decision needed
 
