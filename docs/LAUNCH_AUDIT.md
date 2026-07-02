@@ -2,6 +2,40 @@
 
 **Scope:** full-stack review for a commercial launch at scale (thousands→millions of users), across architecture, security, product, UX, QA, and growth.
 
+---
+
+## Status update — 2026-07-02 (verification + hardening pass)
+
+Landed since the original audit (each verified by the full 394-test suite,
+`cargo check`, and a production `pnpm build`):
+
+| Item | Status | Commit |
+|------|--------|--------|
+| S1 — `system.open_url` http/https scheme guard | ✅ landed + tested | `ea87fff` |
+| S4 — zip-slip guard in addon install | ✅ landed + tested | `fb85558` |
+| S5 — persisted-chain re-validation on load | ✅ landed + tested (UI wiring of `edits_valid` still TODO) | `6d8f852` |
+| S3 — pinned SHA-256 on default GGUF download | ✅ landed + tested — published HF LFS hash `509287f7…894d3c`, cross-checked byte-for-byte against a real downloaded file | `f8a0711` |
+| §3.1 (partial) — IPC read timeout + dead-process detection | ✅ landed — reader thread + per-method deadline (20 min heavy ops / 120 s default), stale-response discard by JSON-RPC id, EOF → clear "sidecar exited" error. Removes the permanent-hang failure mode. Full async multiplexing still future work. | `1540f6e` |
+| §4 — app-wide React error boundary | ✅ landed — recovery UI with Try-again / Restart | `da1e003` |
+| S2 — CSP + asset-scope lockdown | ⏸ still held (by design) — apply `docs/security-hardening.md` checklist on a real build |
+
+New findings from the frontend/Rust deep-read (2026-07-02):
+
+- **F1 (Med, UX):** `Generate.tsx` polls `model.poll_task` every 2 s with **no
+  deadline** — a task stuck in PROCESSING spins the progress bar forever. The
+  sidecar's `POLL_CAP_S = 300` constant exists but nothing enforces it. Add a
+  frontend deadline (~10 min) with a friendly timeout + retry.
+- **F2 (Low, perf):** production JS bundle is 1.15 MB in one chunk (three.js
+  monolithic import). Code-split the 3D preview (`React.lazy`) to cut first
+  paint; low priority for a desktop webview but free wins exist.
+- **F3 (Info, build):** `src-tauri/resources/*` (sidecar.exe, addon zip) exist
+  only where `build-sidecar.ps1` last ran — `cargo check` fails in a fresh
+  clone until it's run once. Document in README or make the build script the
+  single entry point.
+- Otherwise the deep-read **confirmed** the original assessment: screens
+  handle unmount races correctly (`cancelled` flags), IPC error paths set
+  user-visible state, no XSS sinks, no unhandled-rejection patterns found.
+
 **Method / honesty note:** The Python sidecar (dispatcher, every code-generating op, orchestrator, network clients, model downloader, project I/O, settings, slicer) and the Rust/Tauri shell (sidecar spawning, IPC, config, capabilities) were **deep-read**. The React/TS frontend was **assessed structurally** (routing, IPC wrapper, error handling, state providers, plus a `dangerouslySetInnerHTML`/`eval` sink grep) — individual screen UX was not line-audited. Product/roadmap context is drawn from the repo's own docs (HANDOFF, ISSUES, pipeline).
 
 ---
