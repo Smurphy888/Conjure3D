@@ -3,8 +3,10 @@ use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Stdio};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::thread;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -13,9 +15,38 @@ use std::os::windows::process::CommandExt;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
+/// Methods that legitimately run for minutes (Blender chains, large
+/// downloads, local LLM inference). Everything else gets DEFAULT_TIMEOUT.
+/// The goal is not tight SLAs — it is removing the *permanent* hang: before
+/// this, a wedged op held the state mutex on a blocking read_line forever
+/// and every subsequent IPC call queued behind it until the app was killed.
+const LONG_METHODS: &[&str] = &[
+    "edit.apply_chain",
+    "export.stl",
+    "export.threemf",
+    "meshy.download_glb",
+    "model.download_glb",
+    "llm.generate_chain",
+];
+const LONG_TIMEOUT: Duration = Duration::from_secs(20 * 60);
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
+
+fn timeout_for(method: &str) -> Duration {
+    if LONG_METHODS.contains(&method) {
+        LONG_TIMEOUT
+    } else {
+        DEFAULT_TIMEOUT
+    }
+}
+
 pub struct SidecarState {
     stdin: ChildStdin,
-    stdout: BufReader<std::process::ChildStdout>,
+    /// Lines from the sidecar's stdout, fed by a dedicated reader thread.
+    /// Decoupling the blocking read_line onto its own thread is what lets
+    /// call_inner enforce a timeout: std pipes have no native read timeout.
+    /// The sender half is dropped when the child's stdout hits EOF, so a
+    /// dead sidecar surfaces as a channel disconnect, not a silent hang.
+    rx: Receiver<String>,
     next_id: u64,
     log_path: PathBuf,
     _child: Child,
@@ -92,9 +123,30 @@ impl SidecarState {
         let stdin = child.stdin.take().ok_or("No stdin handle on spawned process")?;
         let stdout = BufReader::new(child.stdout.take().ok_or("No stdout handle on spawned process")?);
 
+        // Reader thread: pump stdout lines into the channel until EOF or a
+        // read error. Dropping `tx` on exit closes the channel, which
+        // call_inner reports as "sidecar process exited".
+        let (tx, rx) = mpsc::channel::<String>();
+        thread::spawn(move || {
+            let mut reader = stdout;
+            let mut line = String::new();
+            loop {
+                line.clear();
+                match reader.read_line(&mut line) {
+                    Ok(0) => break, // EOF — child exited or closed stdout
+                    Ok(_) => {
+                        if tx.send(line.clone()).is_err() {
+                            break; // state dropped; nobody is listening
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+
         Ok(SidecarState {
             stdin,
-            stdout,
+            rx,
             next_id: 1,
             log_path,
             _child: child,
@@ -107,6 +159,15 @@ impl SidecarState {
     }
 
     pub(crate) fn call_inner(&mut self, method: &str, params: serde_json::Value) -> Result<serde_json::Value, String> {
+        self.call_with_timeout(method, params, timeout_for(method))
+    }
+
+    pub(crate) fn call_with_timeout(
+        &mut self,
+        method: &str,
+        params: serde_json::Value,
+        timeout: Duration,
+    ) -> Result<serde_json::Value, String> {
         let id = self.next_id;
         self.next_id += 1;
 
@@ -120,19 +181,44 @@ impl SidecarState {
         writeln!(self.stdin, "{req}").map_err(|e| format!("sidecar write: {e}"))?;
         self.stdin.flush().map_err(|e| format!("sidecar flush: {e}"))?;
 
-        let mut line = String::new();
-        self.stdout
-            .read_line(&mut line)
-            .map_err(|e| format!("sidecar read: {e}"))?;
+        let deadline = Instant::now() + timeout;
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            let line = match self.rx.recv_timeout(remaining) {
+                Ok(l) => l,
+                Err(RecvTimeoutError::Timeout) => {
+                    return Err(format!(
+                        "sidecar call '{method}' timed out after {}s — the operation \
+                         may still be running; later calls will resume once it finishes",
+                        timeout.as_secs()
+                    ));
+                }
+                Err(RecvTimeoutError::Disconnected) => {
+                    return Err(
+                        "sidecar process exited unexpectedly — restart the app \
+                         (see the diagnostic log for the crash reason)"
+                            .to_string(),
+                    );
+                }
+            };
 
-        let resp: serde_json::Value =
-            serde_json::from_str(line.trim()).map_err(|e| format!("sidecar parse: {e}"))?;
+            let resp: serde_json::Value =
+                serde_json::from_str(line.trim()).map_err(|e| format!("sidecar parse: {e}"))?;
 
-        if let Some(err) = resp.get("error") {
-            return Err(err.to_string());
+            // The protocol is strictly sequential, but a previous call may
+            // have timed out client-side while the sidecar kept working; its
+            // late response is still in the channel. Discard anything that
+            // doesn't match our id instead of mis-attributing it.
+            match resp.get("id").and_then(|v| v.as_u64()) {
+                Some(rid) if rid == id => {
+                    if let Some(err) = resp.get("error") {
+                        return Err(err.to_string());
+                    }
+                    return Ok(resp["result"].clone());
+                }
+                _ => continue, // stale response from a timed-out call
+            }
         }
-
-        Ok(resp["result"].clone())
     }
 }
 
