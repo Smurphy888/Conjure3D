@@ -27,6 +27,7 @@ import shutil
 from pathlib import Path
 
 from orchestrator import PROJECT_SCHEMA_VERSION, REQUIRED_PROJECT_FIELDS
+from edit_chain_schema import validate_chain
 from slugify import slugify
 
 # Frozen contract the frontend branches on (same precedent as
@@ -186,12 +187,29 @@ def load(params: dict) -> dict:
         if p is not None and not Path(p).is_file()
     ]
 
+    edits = doc.get("edits") or []
+
+    # Defence in depth: re-check the persisted edit chain against the same
+    # Pydantic schema the LLM path uses (extra='forbid' + ranged fields). A
+    # tampered/hand-edited .conjure3d.json can't inject code — the orchestrator
+    # coerces types and whitelists op names — but a malformed chain would fail
+    # silently mid-run. This surfaces it up front as a NON-FATAL signal so the
+    # UI can warn before re-running, without breaking loads of otherwise-valid
+    # projects (we never hard-reject here).
+    edits_valid = True
+    edits_validation_error = None
+    try:
+        validate_chain({"edits": edits})
+    except Exception as exc:  # noqa: BLE001 — surface as a signal, never raise
+        edits_valid = False
+        edits_validation_error = str(exc)
+
     project = {
         "name": doc["name"],
         "prompt": doc["prompt"],
         "preview_task_id": doc["preview_task_id"],
         "source_glb": doc["source_glb"],
-        "edits": doc.get("edits") or [],
+        "edits": edits,
         "color_split_mode": doc.get("color_split_mode") or "none",
         "last_sanity": doc.get("last_sanity"),
     }
@@ -200,6 +218,8 @@ def load(params: dict) -> dict:
         "project": project,
         "artifact_dir": str(art_dir),
         "artifacts": {"preview_glb": preview_abs, "stl_paths": stl_abs},
+        "edits_valid": edits_valid,
+        "edits_validation_error": edits_validation_error,
     }
     if warnings:
         result["warning_code"] = "ARTIFACT_MISSING"

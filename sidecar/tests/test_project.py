@@ -160,6 +160,53 @@ def test_save_and_load_reject_bad_param_types():
         project.load({"project_file": 123})  # type: ignore[arg-type]
 
 
+# ── loaded-chain re-validation signal (S5) ─────────────────────────────────────
+
+def test_load_flags_valid_edit_chain(tmp_path):
+    glb, stls = _make_artifacts(tmp_path)
+    saved = project.save({
+        "dst_dir": str(tmp_path / "v"),
+        "project": _project_dict(),
+        "artifacts": {"preview_glb": glb, "stl_paths": stls},
+    })
+    r = project.load({"project_file": saved["project_file"]})
+    assert r["ok"] is True
+    assert r["edits_valid"] is True
+    assert r["edits_validation_error"] is None
+
+
+def test_load_flags_out_of_range_edit_chain_without_failing(tmp_path):
+    """A tampered/corrupt chain (target_mm above the schema's le=300 cap) still
+    loads — the orchestrator is already injection-safe — but is flagged so the
+    UI can warn before re-running."""
+    pf = tmp_path / "bad.conjure3d.json"
+    doc = {
+        "version": 1, "name": "Bad", "prompt": "p", "preview_task_id": None,
+        "source_glb": "s.glb", "color_split_mode": "none",
+        "edits": [{"type": "scale_to_longest", "target_mm": 99999}],
+    }
+    pf.write_text(json.dumps(doc), encoding="utf-8")
+    r = project.load({"project_file": str(pf)})
+    assert r["ok"] is True              # non-fatal
+    assert r["edits_valid"] is False
+    assert r["edits_validation_error"]  # non-empty message
+    # The raw edits are still returned verbatim (the UI decides what to do).
+    assert r["project"]["edits"] == [{"type": "scale_to_longest", "target_mm": 99999}]
+
+
+def test_load_flags_unknown_edit_type(tmp_path):
+    pf = tmp_path / "unknown.conjure3d.json"
+    doc = {
+        "version": 1, "name": "U", "prompt": "p", "preview_task_id": None,
+        "source_glb": "s.glb", "color_split_mode": "none",
+        "edits": [{"type": "frobnicate", "wat": 1}],
+    }
+    pf.write_text(json.dumps(doc), encoding="utf-8")
+    r = project.load({"project_file": str(pf)})
+    assert r["ok"] is True
+    assert r["edits_valid"] is False
+
+
 def test_dispatch_project_save_load_over_rpc(tmp_path):
     glb = tmp_path / "preview.glb"
     glb.write_bytes(b"G")
