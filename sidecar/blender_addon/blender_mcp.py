@@ -23,12 +23,42 @@ from contextlib import redirect_stdout, suppress
 bl_info = {
     "name": "Blender MCP",
     "author": "BlenderMCP",
-    "version": (1, 2),
+    "version": (1, 3),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar > BlenderMCP",
     "description": "Connect Blender to Claude via MCP",
     "category": "Interface",
 }
+
+
+def _get_or_create_auth_token():
+    """Conjure3D hardening: shared secret for socket auth.
+
+    Mirrors sidecar/mcp_token.py (this file must stay self-contained inside
+    Blender, so the ~30 lines are duplicated — keep the two in sync). The
+    token lives at %LOCALAPPDATA%\\Conjure3D\\mcp_token; whichever side
+    starts first creates it, and every incoming command must carry it in a
+    top-level "token" field or the connection is refused.
+    """
+    import secrets
+    base = os.environ.get("LOCALAPPDATA") or osp.expanduser("~")
+    token_dir = osp.join(base, "Conjure3D")
+    token_file = osp.join(token_dir, "mcp_token")
+    try:
+        with open(token_file, "r", encoding="utf-8") as fh:
+            tok = fh.read().strip()
+        if tok:
+            return tok
+    except OSError:
+        pass
+    os.makedirs(token_dir, exist_ok=True)
+    tok = secrets.token_hex(32)
+    tmp = token_file + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        fh.write(tok)
+    os.replace(tmp, token_file)
+    with open(token_file, "r", encoding="utf-8") as fh:
+        return fh.read().strip()
 
 RODIN_FREE_TRIAL_KEY = "k9TcfFoEhNd9cCPP2guHAHHHkctZHIRhZDywZ1euGUXwihbYLpOjQhofby80NJez"
 
@@ -37,12 +67,51 @@ REQ_HEADERS = requests.utils.default_headers()
 REQ_HEADERS.update({"User-Agent": "blender-mcp"})
 
 class BlenderMCPServer:
-    def __init__(self, host='localhost', port=9876):
+    # Conjure3D hardening: bind explicitly to 127.0.0.1 (not the 'localhost'
+    # name, which can resolve dual-stack) and require the shared token on
+    # every command.
+    def __init__(self, host='127.0.0.1', port=9876):
         self.host = host
         self.port = port
         self.running = False
         self.socket = None
         self.server_thread = None
+        self.auth_token = _get_or_create_auth_token()
+
+    def _open_listener(self):
+        """(Re)create the listening socket + server thread. Shared by
+        start() and the watchdog restart path."""
+        if self.socket:
+            with suppress(Exception):
+                self.socket.close()
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.socket.bind((self.host, self.port))
+        self.socket.listen(1)
+        self.server_thread = threading.Thread(target=self._server_loop)
+        self.server_thread.daemon = True
+        self.server_thread.start()
+
+    def _watchdog(self):
+        """Conjure3D hardening: self-healing timer on Blender's main thread.
+
+        The known failure mode of this addon is the daemon server thread
+        silently dying mid-session (the sidecar's whole retry/session design
+        exists to work around it). Since the thread is ours, the right fix is
+        here: every 5 s, if the server should be running but the thread is
+        dead, rebuild the listener. Returning None unregisters the timer once
+        the server is stopped deliberately.
+        """
+        if not self.running:
+            return None
+        if self.server_thread is None or not self.server_thread.is_alive():
+            print("BlenderMCP watchdog: server thread dead — restarting listener")
+            try:
+                self._open_listener()
+                print("BlenderMCP watchdog: listener restarted")
+            except Exception as e:
+                print(f"BlenderMCP watchdog: restart failed ({e}); retrying in 5s")
+        return 5.0
 
     def start(self):
         if self.running:
@@ -52,17 +121,10 @@ class BlenderMCPServer:
         self.running = True
 
         try:
-            # Create socket
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.socket.bind((self.host, self.port))
-            self.socket.listen(1)
-
-            # Start server thread
-            self.server_thread = threading.Thread(target=self._server_loop)
-            self.server_thread.daemon = True
-            self.server_thread.start()
-
+            self._open_listener()
+            # Register the self-heal watchdog (idempotent across reconnects).
+            if not bpy.app.timers.is_registered(self._watchdog):
+                bpy.app.timers.register(self._watchdog, first_interval=5.0)
             print(f"BlenderMCP server started on {self.host}:{self.port}")
         except Exception as e:
             print(f"Failed to start server: {str(e)}")
@@ -70,6 +132,10 @@ class BlenderMCPServer:
 
     def stop(self):
         self.running = False
+
+        with suppress(Exception):
+            if bpy.app.timers.is_registered(self._watchdog):
+                bpy.app.timers.unregister(self._watchdog)
 
         # Close socket
         if self.socket:
@@ -153,6 +219,28 @@ class BlenderMCPServer:
                         buffer = b''
                     except json.JSONDecodeError:
                         continue
+
+                    # Conjure3D hardening: authenticate BEFORE anything is
+                    # scheduled on the main thread. Constant-time compare;
+                    # a bad/missing token gets one structured error and the
+                    # connection is closed.
+                    supplied = command.pop("token", None)
+                    if not isinstance(supplied, str) or not hmac.compare_digest(
+                        supplied, self.auth_token
+                    ):
+                        print("Rejected command with missing/invalid auth token")
+                        with suppress(Exception):
+                            client.sendall(json.dumps({
+                                "status": "error",
+                                "message": (
+                                    "auth_failed: missing or invalid token. "
+                                    "Conjure3D and this addon share the token file "
+                                    "%LOCALAPPDATA%\\Conjure3D\\mcp_token — update the "
+                                    "addon via the Conjure3D setup wizard and restart "
+                                    "both apps if they disagree."
+                                ),
+                            }).encode('utf-8'))
+                        break
 
                     done = threading.Event()
                     result_holder = [None]

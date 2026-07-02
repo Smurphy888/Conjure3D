@@ -131,6 +131,43 @@ def test_install_absolute_path_member_is_refused(tmp_path):
     assert not list(tmp_path.rglob("pwned.py"))
 
 
+# ── Hardened-addon source markers ─────────────────────────────────────────────
+# The addon must stay a single self-contained .py inside Blender, so its auth
+# and watchdog logic is a mirrored copy of the sidecar side. These marker
+# tests stop a refactor from silently dropping either half.
+
+_ADDON_SRC = (Path(__file__).parent.parent / "blender_addon" / "blender_mcp.py").read_text(
+    encoding="utf-8"
+)
+
+
+def test_addon_has_auth_token_check():
+    assert "_get_or_create_auth_token" in _ADDON_SRC
+    assert "hmac.compare_digest" in _ADDON_SRC
+    assert "auth_failed" in _ADDON_SRC
+
+
+def test_addon_binds_loopback_not_localhost_name():
+    assert "host='127.0.0.1'" in _ADDON_SRC
+
+
+def test_addon_has_self_heal_watchdog():
+    assert "_watchdog" in _ADDON_SRC
+    assert "bpy.app.timers.register(self._watchdog" in _ADDON_SRC
+
+
+def test_addon_token_path_matches_sidecar():
+    """Both sides must read %LOCALAPPDATA%/Conjure3D/mcp_token."""
+    import mcp_token
+    assert 'osp.join(base, "Conjure3D")' in _ADDON_SRC
+    assert '"mcp_token"' in _ADDON_SRC
+    assert mcp_token.TOKEN_FILENAME == "mcp_token"
+
+
+def test_addon_version_bumped_for_hardening():
+    assert '"version": (1, 3)' in _ADDON_SRC
+
+
 def test_dispatch_wizard_install_addon(tmp_path):
     """Integration: dispatch wizard.install_addon via the JSON-RPC dispatcher."""
     import json, io

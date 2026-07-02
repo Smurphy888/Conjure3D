@@ -6,11 +6,21 @@ Sends a get_scene_info command and validates the response to distinguish
 import json
 import socket
 
+from mcp_token import get_or_create_token
+
 HOST = "127.0.0.1"
 PORT = 9876
 TIMEOUT = 2.0
 
-_PING = json.dumps({"type": "get_scene_info", "params": {}}).encode()
+
+def _ping_payload() -> bytes:
+    """get_scene_info envelope incl. the shared auth token — built per call
+    (not module-level) because the token file may not exist at import time."""
+    return json.dumps({
+        "type": "get_scene_info",
+        "params": {},
+        "token": get_or_create_token(),
+    }).encode()
 
 
 def test_socket(host: str = HOST, port: int = PORT, timeout: float = TIMEOUT) -> dict:
@@ -20,7 +30,7 @@ def test_socket(host: str = HOST, port: int = PORT, timeout: float = TIMEOUT) ->
     """
     try:
         with socket.create_connection((host, port), timeout=timeout) as sock:
-            sock.sendall(_PING)
+            sock.sendall(_ping_payload())
             sock.settimeout(timeout)
             buf = b""
             while True:

@@ -21,8 +21,21 @@ import threading
 import time
 from contextlib import contextmanager
 
+from mcp_token import get_or_create_token
+
 HOST = "127.0.0.1"
 PORT = 9876
+
+
+def _payload(code: str) -> bytes:
+    """Command envelope incl. the shared auth token (LAUNCH_AUDIT §1.2).
+    The hardened addon rejects commands without a matching token; older
+    addon versions ignore the extra field, so this is backward-compatible."""
+    return json.dumps({
+        "type": "execute_code",
+        "params": {"code": code},
+        "token": get_or_create_token(),
+    }).encode("utf-8")
 
 DEFAULT_TIMEOUT = 30.0
 HEAVY_TIMEOUT = 120.0
@@ -81,7 +94,7 @@ def execute_blender_code(
     if sess is not None:
         return sess.execute_code(code, timeout=max(timeout, HEAVY_TIMEOUT))
 
-    payload = json.dumps({"type": "execute_code", "params": {"code": code}}).encode("utf-8")
+    payload = _payload(code)
 
     sock = _connect_with_retry(host, port, timeout, retries)
 
@@ -155,9 +168,7 @@ class BlenderSession:
         if not isinstance(code, str):
             raise TypeError(f"code must be str, got {type(code).__name__}")
 
-        payload = json.dumps(
-            {"type": "execute_code", "params": {"code": code}}
-        ).encode("utf-8")
+        payload = _payload(code)
 
         try:
             self._sock.settimeout(timeout)
