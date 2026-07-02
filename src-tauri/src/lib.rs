@@ -7,6 +7,13 @@ mod sidecar;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Auto-update (LAUNCH_AUDIT 1.3): the updater checks the endpoint in
+        // tauri.conf.json and verifies artifact signatures against the pinned
+        // pubkey; the process plugin provides relaunch() after install. The
+        // frontend (UpdateChip) drives the check — nothing happens at startup
+        // on the Rust side.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             #[cfg(debug_assertions)]
             let exe_path = None;

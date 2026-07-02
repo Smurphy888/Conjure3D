@@ -7,6 +7,7 @@ import { ProjectProvider } from "./lib/projectState";
 import { ConnectionProvider } from "./lib/connectionContext";
 import { ConnectionBadge } from "./components/ConnectionBadge";
 import { ModelDownloadChip } from "./components/ModelDownloadChip";
+import { UpdateChip } from "./components/UpdateChip";
 import { Wizard } from "./Wizard";
 import { Home } from "./Home";
 import { NewProject } from "./screens/NewProject";
@@ -186,6 +187,7 @@ function App() {
                         <AppRoutes settings={effective} onWizardDone={handleWizardDone} />
                         <ConnectionBadge />
                         <ModelDownloadChip />
+                        <UpdateChip />
                     </ProjectProvider>
                 </ConnectionProvider>
             </HashRouter>
