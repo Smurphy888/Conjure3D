@@ -245,6 +245,34 @@ def test_reset_downloader_clears_singleton():
     assert a is not b
 
 
+# ── Pinned default checksum (S3) ────────────────────────────────────────────
+
+
+def test_default_url_gets_pinned_sha():
+    """The default download path must always verify against the published
+    hash — no caller opt-in required."""
+    dl = md.get_downloader()  # default URL, no expected_sha256
+    assert dl.expected_sha256 == md.DEFAULT_MODEL_SHA256
+
+
+def test_custom_url_does_not_inherit_default_sha():
+    """A mirror may serve a different (requantised) file; silently applying
+    the default hash would hard-fail every legitimate custom download."""
+    dl = md.get_downloader(url="https://mirror.example/model.gguf")
+    assert dl.expected_sha256 is None
+
+
+def test_explicit_sha_wins_over_pin():
+    explicit = "a" * 64
+    dl = md.get_downloader(expected_sha256=explicit)
+    assert dl.expected_sha256 == explicit
+
+
+def test_pinned_sha_is_wellformed():
+    assert len(md.DEFAULT_MODEL_SHA256) == 64
+    assert all(c in "0123456789abcdef" for c in md.DEFAULT_MODEL_SHA256)
+
+
 # ── Thread integration ──────────────────────────────────────────────────────
 
 

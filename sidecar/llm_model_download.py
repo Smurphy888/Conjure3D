@@ -49,6 +49,18 @@ DEFAULT_MODEL_URL = (
     "qwen2.5-coder-7b-instruct-q4_k_m.gguf"
 )
 
+# Published SHA-256 for the default model, pinned so the default download
+# path always verifies (S3 in docs/LAUNCH_AUDIT.md). Source: Hugging Face
+# LFS metadata for Qwen/Qwen2.5-Coder-7B-Instruct-GGUF @ main
+# (https://huggingface.co/api/models/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/tree/main,
+# lfs.oid of qwen2.5-coder-7b-instruct-q4_k_m.gguf, size 4,683,073,536).
+# Only applied when the URL is DEFAULT_MODEL_URL — a custom mirror URL may
+# legitimately serve a different (e.g. requantised) file, so callers using
+# url=... must pass their own expected_sha256 to get verification.
+DEFAULT_MODEL_SHA256 = (
+    "509287f78cb4d4cf6b3843734733b914b2c158e43e22a7f4bf5e963800894d3c"
+)
+
 # Streaming chunk size. 1 MiB balances disk-write batching against
 # how often we update the progress counter (which the UI polls).
 CHUNK_BYTES = 1 << 20  # 1 MiB
@@ -350,6 +362,11 @@ def get_downloader(
     global _downloader
     with _singleton_lock:
         if _downloader is None:
+            # Default download path is always verified: pin the published
+            # hash unless the caller supplied their own (or a custom URL,
+            # whose content we cannot know the hash of).
+            if expected_sha256 is None and url == DEFAULT_MODEL_URL:
+                expected_sha256 = DEFAULT_MODEL_SHA256
             _downloader = ModelDownloader(
                 url=url, dest_path=dest_path, expected_sha256=expected_sha256
             )
