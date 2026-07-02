@@ -99,6 +99,38 @@ def test_install_returns_path_string(tmp_path):
     assert "addons" in r["path"]
 
 
+# ── zip-slip guard (S4) ────────────────────────────────────────────────────────
+
+def test_install_rejects_zip_slip_member(tmp_path):
+    """A member that escapes the addons dir via ../ must be refused, and no
+    file may be written outside the target dir."""
+    zip_path = _make_zip(tmp_path / "zip", ["blender_mcp.py", "../../evil.py"])
+    addons_root = tmp_path / "addons_root"
+
+    r = install_addon("4.2.3", zip_path=zip_path, addons_root=addons_root)
+
+    assert r["ok"] is False
+    assert "zip-slip" in r["error"].lower()
+    # The traversal target (addons_root/4.2/scripts/../../evil.py resolves to
+    # addons_root/4.2/evil.py? no — ../../ from .../scripts/addons lands in
+    # .../4.2). Assert nothing named evil.py exists anywhere under tmp_path.
+    assert not list(tmp_path.rglob("evil.py"))
+
+
+def test_install_absolute_path_member_is_refused(tmp_path):
+    """An absolute-path member (Windows drive or POSIX root) must not extract
+    outside the addons dir."""
+    # zipfile normalises a leading '/', so use an explicit parent-escape which
+    # is the portable zip-slip shape.
+    zip_path = _make_zip(tmp_path / "zip", ["ok.py", "../../../pwned.py"])
+    addons_root = tmp_path / "addons_root"
+
+    r = install_addon("4.2", zip_path=zip_path, addons_root=addons_root)
+
+    assert r["ok"] is False
+    assert not list(tmp_path.rglob("pwned.py"))
+
+
 def test_dispatch_wizard_install_addon(tmp_path):
     """Integration: dispatch wizard.install_addon via the JSON-RPC dispatcher."""
     import json, io

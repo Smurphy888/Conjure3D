@@ -24,6 +24,20 @@ def _major_minor(version: str) -> str:
     return f"{parts[0]}.{parts[1]}"
 
 
+def _safe_extract_all(zf: zipfile.ZipFile, dest_dir: Path) -> None:
+    """Extract every member of ``zf`` into ``dest_dir``, refusing any member
+    whose resolved path would land outside ``dest_dir`` (zip-slip). The addon
+    zip is a first-party bundled resource today, so this is defence in depth:
+    it guarantees a tampered/replaced zip can never write over arbitrary files
+    (e.g. drop a malicious startup script elsewhere in the Blender tree)."""
+    dest_root = Path(dest_dir).resolve()
+    for member in zf.namelist():
+        target = (dest_root / member).resolve()
+        if target != dest_root and dest_root not in target.parents:
+            raise ValueError(f"Unsafe path in addon zip (zip-slip): {member!r}")
+    zf.extractall(dest_dir)
+
+
 def install_addon(
     blender_version: str,
     zip_path: Path | None = None,
@@ -60,7 +74,7 @@ def install_addon(
     try:
         addons_dir.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(zip_path) as zf:
-            zf.extractall(addons_dir)
+            _safe_extract_all(zf, addons_dir)
         return {"ok": True, "path": str(addons_dir)}
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
