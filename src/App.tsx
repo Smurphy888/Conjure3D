@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Component, type ErrorInfo, type ReactNode, useEffect, useRef, useState } from "react";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
 import { type Settings, DEFAULT_SETTINGS, readSettings, wizardComplete } from "./lib/settings";
@@ -16,6 +16,56 @@ import { Editor } from "./screens/Editor";
 import { AIEditor } from "./screens/AIEditor";
 import { Export } from "./screens/Export";
 import { Settings as SettingsScreen } from "./screens/Settings";
+
+/**
+ * App-wide error boundary. Before this existed, a render throw in ANY screen
+ * white-screened the whole app with no recovery path (the only boundary was
+ * the local GltfErrorBoundary inside the 3D preview). Class component because
+ * React only exposes render-error catching through the class lifecycle.
+ *
+ * Recovery model: "Try again" clears the boundary and re-renders (enough for
+ * transient state bugs); "Restart app" reloads the webview, which re-reads
+ * settings and reconnects — the sidecar process is owned by the Rust shell,
+ * so it survives the reload.
+ */
+class AppErrorBoundary extends Component<
+    { children: ReactNode },
+    { error: Error | null }
+> {
+    state: { error: Error | null } = { error: null };
+
+    static getDerivedStateFromError(error: Error) {
+        return { error };
+    }
+
+    componentDidCatch(error: Error, info: ErrorInfo) {
+        // The webview console is included in "Copy diagnostic" workflows via
+        // DevTools; log the component stack so a field report is actionable.
+        console.error("App crashed:", error, info.componentStack);
+    }
+
+    render() {
+        if (this.state.error === null) return this.props.children;
+        return (
+            <div className="container" style={{ maxWidth: 560, margin: "4rem auto", textAlign: "center" }}>
+                <h1>Something went wrong</h1>
+                <p style={{ opacity: 0.85 }}>
+                    The screen hit an unexpected error. Your project files on disk are not affected.
+                </p>
+                <details style={{ textAlign: "left", margin: "1rem 0", opacity: 0.7 }}>
+                    <summary>Technical details</summary>
+                    <pre style={{ whiteSpace: "pre-wrap", fontSize: "0.8rem" }}>
+                        {String(this.state.error?.stack || this.state.error)}
+                    </pre>
+                </details>
+                <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center" }}>
+                    <button onClick={() => this.setState({ error: null })}>Try again</button>
+                    <button onClick={() => window.location.reload()}>Restart app</button>
+                </div>
+            </div>
+        );
+    }
+}
 
 function CursorGlow() {
     const ref = useRef<HTMLDivElement>(null);
@@ -128,16 +178,18 @@ function App() {
     }
 
     return (
-        <HashRouter>
-            <CursorGlow />
-            <ConnectionProvider>
-                <ProjectProvider>
-                    <AppRoutes settings={effective} onWizardDone={handleWizardDone} />
-                    <ConnectionBadge />
-                    <ModelDownloadChip />
-                </ProjectProvider>
-            </ConnectionProvider>
-        </HashRouter>
+        <AppErrorBoundary>
+            <HashRouter>
+                <CursorGlow />
+                <ConnectionProvider>
+                    <ProjectProvider>
+                        <AppRoutes settings={effective} onWizardDone={handleWizardDone} />
+                        <ConnectionBadge />
+                        <ModelDownloadChip />
+                    </ProjectProvider>
+                </ConnectionProvider>
+            </HashRouter>
+        </AppErrorBoundary>
     );
 }
 
