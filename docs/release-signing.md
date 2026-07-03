@@ -38,18 +38,33 @@ assets via the publish script.
 
 ### Building a release
 
-```powershell
-# from the worktree (node_modules + venv live there)
-# NOTE: the bundler wants the key CONTENTS in TAURI_SIGNING_PRIVATE_KEY —
-# the _PATH variant is not honoured by every CLI version.
-$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content "$env:USERPROFILE\.tauri\conjure3d_updater.key" -Raw
-.\scripts\build-sidecar.ps1
+Run the signing-sensitive part from **Git Bash, not PowerShell**. Two
+verified-the-hard-way gotchas:
+
+1. The bundler wants the key **contents** in `TAURI_SIGNING_PRIVATE_KEY`
+   (the `_PATH` variant is not honoured by every CLI version).
+2. The signer requires `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` to be **set**,
+   even when the key has no password — and Windows PowerShell 5.1 cannot set
+   an empty environment variable (`$env:VAR = ""` silently *deletes* it), so
+   the signing step stalls/fails under PowerShell with the exe produced but
+   no `.sig`. Git Bash sets empty vars fine.
+
+```bash
+# from the worktree (node_modules + venv live there), in Git Bash
+powershell -ExecutionPolicy Bypass -File scripts/build-sidecar.ps1
+export TAURI_SIGNING_PRIVATE_KEY="$(cat "$USERPROFILE/.tauri/conjure3d_updater.key")"
+export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
 pnpm tauri build
 ```
 
-Without `TAURI_SIGNING_PRIVATE_KEY` set, the build fails at the signing step
-once `createUpdaterArtifacts` is on (installer is still produced; only the
-`.sig` step aborts).
+If a build already produced the installer but no `.sig` (the PowerShell
+failure mode above), sign it after the fact instead of rebuilding:
+
+```bash
+export TAURI_SIGNING_PRIVATE_KEY="$(cat "$USERPROFILE/.tauri/conjure3d_updater.key")"
+export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
+pnpm tauri signer sign "src-tauri/target/release/bundle/nsis/Conjure3D_<ver>_x64-setup.exe"
+```
 
 ### Publishing a release
 
