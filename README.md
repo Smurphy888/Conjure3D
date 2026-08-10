@@ -12,6 +12,18 @@ Prompt → Meshy preview → (your pick) → auto-clean → editor → STL → B
 
 Conjure3D drives a running Blender instance via the BlenderMCP addon. Blender stays visible while you work, so you can watch the mesh evolve in Blender's viewport at the same time as the in-app preview. The first-run wizard installs the BlenderMCP addon and walks you through connecting it.
 
+
+## Related repositories
+
+This repo is the desktop app only. Two sibling projects used to live in this
+tree and now have their own repos:
+
+- **Emerald Compass Studio** — the four storefronts, the operator dashboard and
+  the digital-products line. Also holds `ROADMAP.md`, the cross-project plan
+  that sequences this app alongside the commerce work.
+- **InkFlow** — reMarkable note capture that feeds the commerce idea inbox.
+
+
 ## What can it print?
 
 Anything you can describe that fits within a 256mm cube on the X1C. Examples that have been tested end-to-end:

@@ -1,10 +1,40 @@
 # Security hardening — CSP & asset-protocol scope (S2)
 
-**Status: PROPOSED, not enabled.** This change must be verified in a real build
-before merging — a wrong CSP directive or too-narrow asset scope will white-screen
-the app or break the 3D preview, and neither is catchable by the Python test suite.
-The other three hardening fixes (S1 open_url guard, S4 zip-slip guard, S5 loaded-chain
-validation) are already applied with tests; this one is deliberately held.
+**Status: CSP ENABLED 2026-07-16 (live-verified). Asset-scope narrowing NOT
+applied — left at `["**"]`.** Split outcome, deliberately:
+
+**CSP — applied and verified.** Replaced `csp: null` with the strict policy
+below, plus one widening: `blob:` added to `img-src` and `connect-src` (three.js
+GLTFLoader loads embedded GLB textures via `URL.createObjectURL`; Meshy's Refine
+flow returns textured GLBs — all 8 existing project GLBs were untextured so the
+un-widened policy passed today, but refine would have broken). `blob:` originates
+from same-document JS only, so it's not a meaningful loosening. Verified on a live
+dev build: app boots, no white screen, sidecar IPC round-trip works (provider
+line renders), inline styles render, **zero CSP violations in the dev log**. This
+is the real security win — `default-src 'self'` blocks the XSS *vector itself*.
+
+**Asset-scope narrowing — NOT applied (and the original proposal's token was
+wrong).** The proposal said `scope: ["$LOCALAPPDATA/Conjure3D/**"]`. Verified
+against Tauri 2.11 source (`src/path/mod.rs:216` `from_variable`, `src/scope/fs.rs:184`
+`Scope::new` → `path().parse()`): **`$LOCALAPPDATA` is not a valid Tauri scope
+variable.** The valid set is `$LOCALDATA / $APPLOCALDATA / $APPDATA / $RESOURCE /
+$APPCONFIG`. An unknown token is pushed as a *literal* path component, so
+`$LOCALAPPDATA/Conjure3D/**` would match no real path and **silently break every
+3D preview** — strictly worse than `["**"]`, and invisible to boot/parse checks.
+The correct token is **`$LOCALDATA`** (→ `local_data_dir()` = `%LOCALAPPDATA%` on
+Windows), i.e. `scope: ["$LOCALDATA/Conjure3D/**"]`, which matches where
+`main.py` writes previews. **Left at `["**"]` for now** because (a) it needs a
+live GLB-render test to confirm (couldn't be driven this session without spending
+Meshy credits), and (b) with the strict CSP already blocking XSS, the marginal
+value of narrowing the scope is low — the audit rated `["**"]` acceptable even
+with *no* CSP. To enable later: set `$LOCALDATA/Conjure3D/**`, build, then
+generate a model and confirm the preview renders (watch devtools for an
+asset-scope refusal), including a **custom Save-As dir** which falls outside the
+scope.
+
+Original proposal below for reference. The other three hardening fixes (S1
+open_url guard, S4 zip-slip guard, S5 loaded-chain validation) were already
+applied with tests.
 
 ## Why
 

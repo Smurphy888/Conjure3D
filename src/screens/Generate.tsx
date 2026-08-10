@@ -15,6 +15,13 @@ const PROVIDER_LABELS: Record<string, string> = {
     tripo: "Tripo AI",
 };
 
+// F-E: client-side deadline for the poll loop. A task stuck in PROCESSING
+// otherwise spins the progress bar forever (Cancel was the only way out).
+// On timeout we stop polling and tell the user — we never auto-retry
+// (re-spending credits is always an explicit user click).
+const POLL_INTERVAL_MS = 2000;
+const POLL_DEADLINE_MS = 10 * 60 * 1000;
+
 function phaseLabel(progress: number): string {
     if (progress < 5) return "Starting up…";
     if (progress < 75) return "Generating 3D mesh…";
@@ -45,8 +52,17 @@ export function Generate() {
                 setTaskId(gen.task_id);
                 dispatch({ type: "SET_PREVIEW_TASK", previewTaskId: gen.task_id });
 
+                const startedAt = Date.now();
                 while (!cancelled) {
-                    await new Promise<void>((r) => setTimeout(r, 2000));
+                    if (Date.now() - startedAt > POLL_DEADLINE_MS) {
+                        setError(
+                            "Generation is taking longer than 10 minutes, so polling was stopped. " +
+                            "The task may still be running on the provider's side — no extra credits " +
+                            "were spent. Go back and generate again to retry."
+                        );
+                        return;
+                    }
+                    await new Promise<void>((r) => setTimeout(r, POLL_INTERVAL_MS));
                     if (cancelled) break;
                     const r = await invokeSidecar<PollResult>("model.poll_task", { task_id: gen.task_id });
                     if (cancelled) break;
